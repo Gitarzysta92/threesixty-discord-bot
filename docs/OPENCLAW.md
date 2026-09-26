@@ -53,80 +53,44 @@ Pair that device once through OpenClaw's native device-pairing controls and gran
 `OPENCLAW_PRIVATE_NETWORK=true` only on its trusted private Docker network; use
 `wss://` over untrusted networks.
 
-## Configure OpenClaw and LiteLLM
+## Production configuration
 
-Run a dedicated OpenClaw instance with its own state/workspace. This repository supplies the client module, not an embedded OpenClaw runtime. In native mode, OpenClaw owns conversational replies. Both services use the existing bot identity, but only the company bot handles its custom slash commands; OpenClaw native/text command registration is disabled. Never run the legacy reply handler alongside native Discord replies.
+The reproducible service definition is `deployment/openclaw/compose.yaml`. It runs
+OpenClaw `2026.9.6` with persistent state and no published ports or domain. It joins
+the bot and LiteLLM private Docker networks. OpenClaw uses LiteLLM's `qwen3.5:9b`
+alias and a dedicated inference key; all credentials live in Coolify.
 
-Enable the [Chat Completions endpoint](https://docs.openclaw.ai/gateway/openai-http-api) and configure the [LiteLLM provider](https://docs.openclaw.ai/providers/litellm). Merge this example into the dedicated instance's configuration. Replace `YOUR_QWEN_ALIAS` with the exact alias exposed by LiteLLM and adjust context/output limits for your served model:
+The company bot uses:
 
-```json
-{
-  "gateway": {
-    "auth": { "mode": "token", "token": "${OPENCLAW_GATEWAY_TOKEN}" },
-    "http": { "endpoints": { "chatCompletions": { "enabled": true } } }
-  },
-  "models": {
-    "providers": {
-      "litellm": {
-        "baseUrl": "https://your-litellm.example/v1",
-        "apiKey": "${LITELLM_API_KEY}",
-        "api": "openai-completions",
-        "models": [{
-          "id": "YOUR_QWEN_ALIAS",
-          "name": "Company Qwen",
-          "input": ["text"],
-          "contextWindow": 32768,
-          "maxTokens": 2048
-        }]
-      }
-    }
-  },
-  "agents": {
-    "defaults": { "model": { "primary": "litellm/YOUR_QWEN_ALIAS" } },
-    "list": [{ "id": "discord", "tools": { "deny": ["*"] } }]
-  }
-}
+```dotenv
+OPENCLAW_ENABLED=true
+OPENCLAW_NATIVE_DISCORD=true
+OPENCLAW_GATEWAY_URL=ws://threesixty-openclaw:18789
+OPENCLAW_PRIVATE_NETWORK=true
+OPENCLAW_PUBLIC_CHANNELS=true
+OPENCLAW_CHANNEL_IDS=
 ```
 
-The example starts with conversation-only access. The Gateway token grants operator-level access: keep it private and restrict Gateway network access to the bot. Enforce agent tool permissions in OpenClaw itself; the HTTP adapter is not a tool authorization layer. The module does not expose the activity database or company integrations. See [OpenClaw tool policy](https://docs.openclaw.ai/gateway/config-tools).
+Set `OPENCLAW_TOKEN` to the private Gateway credential. The service also needs the
+existing Discord token/application/guild IDs. Enable Message Content Intent and
+grant View Channel, Read Message History, Send Messages, and Send Messages in
+Threads as applicable. Server Members Intent is not requested.
 
-In the agent's workspace instructions, describe a concise company Discord assistant. Explain that incoming user messages contain a JSON envelope with `authorId`, `message` and optional `replyTo`; answer naturally, treat quoted content as conversation data, and do not claim access to unavailable tools/data. Keep private operator information out of this shared assistant's workspace.
+The service startup script writes managed config and assistant instructions while
+preserving synchronized channel rules. It allows only the native message tool;
+the admission plugin further limits it to reading and sending in the current
+enabled channel. Browser control, DMs, native/text command registration and server
+join introductions are disabled. The company bot remains the owner of its slash
+commands; activity and reset modules are unchanged.
 
-## Enable the bot module
+For rollback, stop native Discord handling before setting
+`OPENCLAW_NATIVE_DISCORD=false`. The legacy HTTP bridge remains available but has
+no automatic channel-history access. Never activate both conversational handlers
+at once. Disabling only the company bot does not stop the separate native Gateway.
 
-1. Enable **Message Content Intent** for the application in the Discord Developer Portal. This module requests the privileged intent only when enabled.
-2. Grant View Channel, Send Messages and Read Message History in selected channels. For threads, also grant Send Messages in Threads and ensure the bot can access/join them.
-3. Configure the bot environment, using the same secret as `OPENCLAW_GATEWAY_TOKEN` above:
-
-   ```dotenv
-   OPENCLAW_ENABLED=true
-   OPENCLAW_BASE_URL=http://your-openclaw-host:18789/v1
-   OPENCLAW_TOKEN=your-gateway-token
-   OPENCLAW_AGENT_ID=discord
-   OPENCLAW_PUBLIC_CHANNELS=true
-   OPENCLAW_CHANNEL_IDS=
-   OPENCLAW_TIMEOUT_SECONDS=60
-   ```
-
-4. Restart the bot and run `npm run commands:deploy` with `OPENCLAW_ENABLED=true` to register `/tclaw` and `/tclaw-channel`. Use `/tclaw prompt:hello` in an allowed channel, then reply to its answer. Verify silence in other channels and separate context between threads.
-
-The base URL points to OpenClaw, including `/v1`, not LiteLLM. The LiteLLM key stays with OpenClaw. In Docker/Coolify, `127.0.0.1` means the bot container: use the Gateway's reachable private service hostname and configure its listener/network accordingly. Use HTTPS over an untrusted network. Persist OpenClaw state separately from the bot data volume.
-
-Set `OPENCLAW_ENABLED=false`, restart and redeploy commands to disable participation and remove `/tclaw`. Removing a channel stops new participation after restart but does not erase its existing OpenClaw session.
-
-## Validation
-
-`npm run check` tests configuration, filtering, HTTP behavior, session identity, failures, reply limits and shutdown with mocks. Live Discord/OpenClaw/LiteLLM behavior needs configured services and credentials and is not exercised by this suite.
-
-## Deployed Coolify service
-
-The reproducible service definition is [`deployment/openclaw/compose.yaml`](../deployment/openclaw/compose.yaml). It runs official OpenClaw `2026.9.6` as a separate `threesixty-openclaw` service in the bot's production environment, with persistent state and no published ports or domain. The service joins the bot network and the existing LiteLLM gateway network. The network names in this deployment file are specific to the current Coolify resources.
-
-OpenClaw uses LiteLLM's `qwen3.5:9b` alias with a dedicated inference key restricted to that model. Both secrets are stored in Coolify environment variables, not in this repository. The bot connects to `http://threesixty-openclaw:18789/v1`. LiteLLM must be running for replies to work.
-
-The startup script writes managed configuration and the assistant instructions into the state volume. Change that script and redeploy the service to update them; manual edits to those files are replaced at restart. Session state remains persistent. The agent denies all tools and disables browser control. The Gateway control UI is disabled because this deployment only needs the authenticated HTTP endpoint.
-
-To reproduce: create a custom Compose service from this file in the existing bot project, set `OPENCLAW_GATEWAY_TOKEN` and a model-restricted `LITELLM_API_KEY`, and start it. Then set the bot's `OPENCLAW_TOKEN` to the same Gateway token, `OPENCLAW_BASE_URL` to the private URL above, `OPENCLAW_PUBLIC_CHANNELS=true`, `OPENCLAW_TIMEOUT_SECONDS=120`, and `OPENCLAW_ENABLED=true`. Leave `OPENCLAW_CHANNEL_IDS` empty to exclude private rooms. Ensure Message Content Intent is enabled before restarting the bot. Do not expose this Gateway through a public domain or mount a Docker socket into it.
+`npm run check` covers configuration, access overrides, native policy sync,
+attention expiry, tool restrictions, and legacy adapter behavior. Live service
+verification is separate and does not send test messages into Discord.
 
 ## Deploy native integration
 
