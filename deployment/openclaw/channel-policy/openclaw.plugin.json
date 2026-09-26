@@ -5,11 +5,26 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["guildId", "botId"],
+    "required": [
+      "guildId",
+      "botId"
+    ],
     "properties": {
-      "guildId": { "type": "string" },
-      "botId": { "type": "string" },
-      "windowSeconds": { "type": "integer", "minimum": 10, "maximum": 3600, "default": 300 }
+      "guildId": {
+        "type": "string"
+      },
+      "botId": {
+        "type": "string"
+      },
+      "windowSeconds": {
+        "type": "integer",
+        "minimum": 10,
+        "maximum": 3600,
+        "default": 300
+      }
     }
+  },
+  "activation": {
+    "onStartup": true
   }
 }
