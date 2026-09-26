@@ -81,3 +81,13 @@ Set `OPENCLAW_ENABLED=false` and restart to disable participation. Removing a ch
 ## Validation
 
 `npm run check` tests configuration, filtering, HTTP behavior, session identity, failures, reply limits and shutdown with mocks. Live Discord/OpenClaw/LiteLLM behavior needs configured services and credentials and is not exercised by this suite.
+
+## Deployed Coolify service
+
+The reproducible service definition is [`deployment/openclaw/compose.yaml`](../deployment/openclaw/compose.yaml). It runs official OpenClaw `2026.9.6` as a separate `threesixty-openclaw` service in the bot's production environment, with persistent state and no published ports or domain. The service joins the bot network and the existing LiteLLM gateway network. The network names in this deployment file are specific to the current Coolify resources.
+
+OpenClaw uses LiteLLM's `qwen3.5:9b` alias with a dedicated inference key restricted to that model. Both secrets are stored in Coolify environment variables, not in this repository. The bot connects to `http://threesixty-openclaw:18789/v1`. LiteLLM must be running for replies to work.
+
+The startup script writes managed configuration and the assistant instructions into the state volume. Change that script and redeploy the service to update them; manual edits to those files are replaced at restart. Session state remains persistent. The agent denies all tools and disables browser control. The Gateway control UI is disabled because this deployment only needs the authenticated HTTP endpoint.
+
+To reproduce: create a custom Compose service from this file in the existing bot project, set `OPENCLAW_GATEWAY_TOKEN` and a model-restricted `LITELLM_API_KEY`, and start it. Then set the bot's `OPENCLAW_TOKEN` to the same Gateway token, `OPENCLAW_BASE_URL` to the private URL above, `OPENCLAW_PUBLIC_CHANNELS=true`, `OPENCLAW_TIMEOUT_SECONDS=120`, and `OPENCLAW_ENABLED=true`. Leave `OPENCLAW_CHANNEL_IDS` empty to exclude private rooms. Ensure Message Content Intent is enabled before restarting the bot. Do not expose this Gateway through a public domain or mount a Docker socket into it.

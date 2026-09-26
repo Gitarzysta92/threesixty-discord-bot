@@ -29,3 +29,5 @@ The local Docker daemon was unavailable during initial preparation. `npm run che
 ## Optional OpenClaw module
 
 Compose passes the `OPENCLAW_*` variables through to the bot. Deploy the OpenClaw Gateway separately and set its reachable private URL in `OPENCLAW_BASE_URL`; localhost refers to the bot container. Keep `OPENCLAW_ENABLED=false` until the agent, Gateway token, allowed channels and Discord Message Content Intent are configured. LiteLLM/Qwen configuration belongs to OpenClaw. Follow [OpenClaw setup](OPENCLAW.md).
+
+The companion service now has a reproducible definition at `deployment/openclaw/compose.yaml`; see the deployed-service section of [OpenClaw setup](OPENCLAW.md). It uses a separate persistent volume and private network alias, and its runtime secrets are managed in Coolify.
