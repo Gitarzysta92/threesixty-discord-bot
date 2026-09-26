@@ -15,12 +15,18 @@ import { createCollector } from './modules/activity-collector/index.js';
 import { createAnalysis } from './modules/activity-analysis/index.js';
 import { createResetAnnouncements } from './modules/reset-announcements/index.js';
 import { openDeliveryStore } from './modules/reset-announcements/store.js';
+import { createOpenClaw } from './modules/openclaw/index.js';
+import { createOpenClawClient } from './modules/openclaw/api.js';
 
 export function composeModules(client: Client, config: Config, logger: Logger) {
   const modules: BotModule[] = [];
   const closers: (() => void)[] = [];
   mkdirSync(config.DATA_DIR, { recursive: true });
   try {
+    if (config.OPENCLAW_ENABLED) modules.push(createOpenClaw(client, createOpenClawClient({
+      baseUrl: config.OPENCLAW_BASE_URL, token: config.OPENCLAW_TOKEN,
+      agentId: config.OPENCLAW_AGENT_ID, timeoutMs: config.OPENCLAW_TIMEOUT_SECONDS * 1000,
+    }), { guildId: config.DISCORD_GUILD_ID, channelIds: config.OPENCLAW_CHANNEL_IDS }, logger.child({ module: 'openclaw' })));
     const settings = openDestinationStore(join(config.DATA_DIR, 'settings.sqlite'));
     closers.push(settings.close);
     if (config.ACTIVITY_COLLECTOR_ENABLED || config.ACTIVITY_ANALYSIS_ENABLED) {

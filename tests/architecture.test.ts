@@ -20,7 +20,7 @@ function files(path: string): string[] {
 }
 
 test('feature modules do not import sibling implementations or composition root', () => {
-  for (const name of ['reset-announcements', 'activity-collector', 'activity-analysis']) {
+  for (const name of ['reset-announcements', 'activity-collector', 'activity-analysis', 'openclaw']) {
     for (const path of files(`src/modules/${name}`).filter(path => path.endsWith('.ts'))) {
       const imports = [...readFileSync(path, 'utf8').matchAll(/from\s+['"]([^'"]+)['"]/g)].map(match => match[1]!);
       for (const imported of imports) {

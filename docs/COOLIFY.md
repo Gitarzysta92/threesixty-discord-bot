@@ -25,3 +25,7 @@ It registers the enabled slash commands in the configured guild and replaces thi
 For later releases, push to `main` and select Deploy in Coolify. The image build executes the test suite. Ensure the old worker stops before the replacement starts; Compose recreation keeps one service instance. Verify the mounted volume survives a restart. Back up the databases while stopped or with SQLite backup tools; do not copy active WAL databases without their journals.
 
 The local Docker daemon was unavailable during initial preparation. `npm run check`, the compiled registration dry run, and Compose schema validation were run locally; the first Coolify image build remains the container validation step until deployment succeeds.
+
+## Optional OpenClaw module
+
+Compose passes the `OPENCLAW_*` variables through to the bot. Deploy the OpenClaw Gateway separately and set its reachable private URL in `OPENCLAW_BASE_URL`; localhost refers to the bot container. Keep `OPENCLAW_ENABLED=false` until the agent, Gateway token, allowed channels and Discord Message Content Intent are configured. LiteLLM/Qwen configuration belongs to OpenClaw. Follow [OpenClaw setup](OPENCLAW.md).

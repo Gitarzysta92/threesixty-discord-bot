@@ -7,7 +7,8 @@ export function createLogger(config: Config) {
     base: { service: 'threesixty-discord-bot' },
     // Scrub the configured token even if an upstream error embeds it in text.
     hooks: {
-      streamWrite: text => text.replaceAll(config.DISCORD_TOKEN, '[REDACTED]'),
+      streamWrite: text => [config.DISCORD_TOKEN, config.OPENCLAW_TOKEN].filter(Boolean)
+        .reduce((output, secret) => output.replaceAll(secret, '[REDACTED]'), text),
     },
   });
 }

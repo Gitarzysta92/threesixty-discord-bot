@@ -6,7 +6,7 @@ Foundation for a multipurpose company Discord bot. TypeScript, discord.js, Node.
 
 1. Install Node.js 22 (`nvm install` if you use nvm), then run `npm ci`.
 2. Create an application in the [Discord Developer Portal](https://discord.com/developers/applications). Copy its application ID and create/reset the bot token under **Bot**.
-3. Configure **Guild Install** with `bot` and `applications.commands` scopes. Install the bot into your company server using the generated link. No Administrator permission or privileged intents are needed. Give the bot View Channel access for activity collection, and View Channel plus Send Messages for the reset destination.
+3. Configure **Guild Install** with `bot` and `applications.commands` scopes. Install the bot into your company server using the generated link. No Administrator permission or privileged intents are needed for the default modules. Optional OpenClaw conversations require Message Content Intent. Give the bot View Channel access for activity collection, and View Channel plus Send Messages for the reset destination.
 4. Enable Discord Developer Mode and copy your server ID.
 5. Run `cp .env.example .env` and fill in the token, application ID, and server ID. Keep `.env` private.
 6. Run `npm run commands:deploy`, then `npm run dev`.
@@ -58,7 +58,7 @@ Keep external integrations and business logic inside each feature module or a sh
 
 Run `npm run build` and `npm start` under a process manager or your hosting platform, injecting the three `DISCORD_*` environment variables and optionally `LOG_LEVEL`. Run one instance for this initial foundation. Standard output contains structured JSON logs; route these through your platform's logging system. The configured bot token is scrubbed from log output. Do not log interaction payloads, messages, or integration secrets.
 
-The client uses `Guilds` and, when activity collection is enabled, `GuildMessages` (no Message Content intent), rejects commands outside the configured server, handles failed interactions centrally, and disconnects on SIGINT/SIGTERM. Startup fails if configuration is invalid or the bot is absent from the configured server. `/status` reports gateway readiness and process uptime; no HTTP health endpoint is included.
+The client uses `Guilds` and, when activity collection or OpenClaw is enabled, `GuildMessages` (Message Content intent only for OpenClaw), rejects commands outside the configured server, handles failed interactions centrally, and disconnects on SIGINT/SIGTERM. Startup fails if configuration is invalid or the bot is absent from the configured server. `/status` reports gateway readiness and process uptime; no HTTP health endpoint is included.
 
 Before production, verify installation, all enabled commands, reset delivery, administrator restrictions, and shutdown in a test server. Local tests mock interactions and do not replace this live check.
 
@@ -75,3 +75,7 @@ Both destinations start disabled. `/resets status` and `/activity-summary status
 `/activity days:7` uses stored records, fills missing history from Discord, then builds an ephemeral report. The requested window is capped by retention. Successful scan ranges persist across restarts, so later requests fetch only gaps and new messages; message IDs prevent double counting with live collection. Active threads, archived public threads, and accessible archived private threads are discovered. Without Manage Threads, only joined archived private threads can be enumerated.
 
 The refresh has an eight-minute budget and respects Discord rate limits. Missing permissions, request failures, and incomplete discovery are called out in the report; completed scans remain saved for the next attempt. One refresh runs at a time. Collector disablement also disables historical collection. Deleted messages already recorded remain counted; this is an activity log, not an exact mirror of current Discord history. Weekly scheduled reports use stored data and do not initiate a refresh.
+
+## AI channel participation
+
+The optional `openclaw` module lets members mention or reply to the bot in configured channels. It connects to a separate OpenClaw Gateway, which can use Qwen through LiteLLM. It is disabled by default and requires Message Content Intent. Addressed message text and same-channel reply context are sent to the agent; activity storage remains metadata-only. See [OpenClaw setup](docs/OPENCLAW.md) for configuration, channel allowlists, conversation behavior and deployment.

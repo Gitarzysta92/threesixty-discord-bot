@@ -18,6 +18,19 @@ const schema = features.extend({
   DISCORD_APPLICATION_ID: snowflake,
   DISCORD_GUILD_ID: snowflake,
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
+  OPENCLAW_ENABLED: flag.default(false),
+  OPENCLAW_BASE_URL: z.string().default('http://127.0.0.1:18789/v1').refine(value => {
+    try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash; }
+    catch { return false; }
+  }, 'Must be an HTTP(S) base URL without credentials, query or fragment'),
+  OPENCLAW_TOKEN: z.string().trim().default(''),
+  OPENCLAW_AGENT_ID: z.string().regex(/^[a-zA-Z0-9_-]+$/).default('discord'),
+  OPENCLAW_CHANNEL_IDS: z.string().default('').transform(value => value.split(',').map(id => id.trim()).filter(Boolean)).pipe(z.array(snowflake)),
+  OPENCLAW_TIMEOUT_SECONDS: z.coerce.number().int().min(5).max(120).default(60),
+}).superRefine((config, context) => {
+  if (!config.OPENCLAW_ENABLED) return;
+  if (!config.OPENCLAW_TOKEN) context.addIssue({ code: 'custom', path: ['OPENCLAW_TOKEN'], message: 'Required when OpenClaw is enabled' });
+  if (!config.OPENCLAW_CHANNEL_IDS.length) context.addIssue({ code: 'custom', path: ['OPENCLAW_CHANNEL_IDS'], message: 'At least one channel is required when OpenClaw is enabled' });
 });
 
 export type Config = z.infer<typeof schema>;
