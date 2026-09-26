@@ -21,6 +21,14 @@
         "minimum": 10,
         "maximum": 3600,
         "default": 300
+      },
+      "mentionNames": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        },
+        "default": []
       }
     }
   },

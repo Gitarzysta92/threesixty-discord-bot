@@ -1,5 +1,5 @@
 /** Admission only: OpenClaw owns history, queues, tools, inference and delivery. */
-export function createAdmission({ guildId, botId, windowSeconds = 300 }, currentConfig, now = Date.now) {
+export function createAdmission({ guildId, botId, mentionNames = [], windowSeconds = 300 }, currentConfig, now = Date.now) {
   const awake = new Map();
   const channelId = value => String(value ?? '').replace(/^discord:/, '').replace(/^channel:/, '');
   const allowed = id => currentConfig().channels?.discord?.guilds?.[guildId]?.channels?.[id]?.enabled === true;
@@ -9,7 +9,12 @@ export function createAdmission({ guildId, botId, windowSeconds = 300 }, current
       const id = channelId(context.conversationId);
       if (!allowed(id)) { awake.delete(id); return { handled: true }; }
       for (const [key, expiry] of awake) if (expiry <= now()) awake.delete(key);
-      const mentioned = new RegExp(`<@!?${botId}>`).test(event.content ?? '') || event.replyToSender === botId;
+      // Native Discord resolves user mentions to @globalName (or @username) before dispatch.
+      const normalizedMention = mentionNames.some(name => {
+        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`(?:^|\\s)@${escaped}(?=$|[\\s.,!?:;])`, 'u').test(event.content ?? '');
+      });
+      const mentioned = normalizedMention || new RegExp(`<@!?${botId}>`).test(event.content ?? '') || event.replyToSender === botId;
       if (mentioned) {
         if (awake.size >= 100) awake.delete(awake.keys().next().value);
         awake.set(id, now() + windowSeconds * 1000);

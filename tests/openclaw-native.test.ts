@@ -87,3 +87,17 @@ test('policy plugin declares startup activation and registers all enforcement ho
   plugin.register({ pluginConfig: { guildId: 'guild', botId: '42' }, runtime: { config: { current: () => ({}) } }, on(name: string) { hooks.push(name); } });
   assert.deepEqual(hooks, ['before_dispatch', 'before_tool_call', 'message_sending']);
 });
+
+// OpenClaw 2026.9.6 resolves raw Discord user mentions before before_dispatch.
+test('native normalized user mentions wake admission without accepting role mentions', async () => {
+  const { createAdmission } = await import(pluginUrl);
+  const make = () => createAdmission({ guildId: 'guild', botId: '42', mentionNames: ['threesixty'] },
+    () => ({ channels: { discord: { guilds: { guild: { channels: { room: { enabled: true } } } } } } }));
+  const context = { conversationId: 'channel:room' };
+  for (const content of ['@threesixty hello', 'hello @threesixty!', '<@42> hello']) {
+    assert.equal(make().beforeDispatch({ channel: 'discord', content }, context), undefined);
+  }
+  for (const content of ['<@&42> hello', '@threesixty-other hello', 'ordinary chat']) {
+    assert.deepEqual(make().beforeDispatch({ channel: 'discord', content }, context), { handled: true });
+  }
+});

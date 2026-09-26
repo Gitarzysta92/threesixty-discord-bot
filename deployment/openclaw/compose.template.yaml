@@ -52,7 +52,7 @@ services:
           }},
           plugins: {...previous.plugins, load: {paths: [dir + '/threesixty-channel-policy']}, entries: {...previous.plugins?.entries,
             discord: {enabled: true}, 'threesixty-channel-policy': {enabled: true, config: {
-              guildId: process.env.DISCORD_GUILD_ID, botId: process.env.DISCORD_APPLICATION_ID, windowSeconds: 300
+              guildId: process.env.DISCORD_GUILD_ID, botId: process.env.DISCORD_APPLICATION_ID, mentionNames: ['threesixty'], windowSeconds: 300
             }}
           }},
           browser: {enabled: false}
