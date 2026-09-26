@@ -1,19 +1,37 @@
 import { ChannelType, Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import type { ChatInputCommandInteraction, Client, Message, MessageMentionOptions } from 'discord.js';
 import type { Logger } from 'pino';
+import type { ChannelAccessStore } from '../../core/channel-access.js';
 import type { BotModule } from '../../core/module.js';
 import type { OpenClawClient } from './api.js';
 
-interface OpenClawConfig { guildId: string; channelIds: readonly string[]; publicChannels?: boolean }
+interface OpenClawConfig { guildId: string; channelIds: readonly string[]; publicChannels?: boolean; access?: ChannelAccessStore }
 
 export const tclawCommandData = new SlashCommandBuilder()
   .setName('tclaw').setDescription('Talk to OpenClaw in this channel')
   .addStringOption(option => option.setName('prompt').setDescription('What would you like to ask?').setRequired(true).setMaxLength(4000));
 
+export const tclawChannelCommandData = new SlashCommandBuilder()
+  .setName('tclaw-channel').setDescription('Configure OpenClaw access per channel')
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+for (const [name, description] of [
+  ['enable', 'Allow this channel to send addressed messages and reply context to OpenClaw'],
+  ['disable', 'Disable OpenClaw in this channel'],
+  ['reset', 'Restore configured defaults for this channel'],
+  ['status', 'Show whether OpenClaw is enabled in this channel'],
+] as const) {
+  tclawChannelCommandData.addSubcommand(sub => sub.setName(name).setDescription(description)
+    .addChannelOption(option => option.setName('channel').setDescription('Channel (defaults to this channel)')
+      .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.PublicThread, ChannelType.PrivateThread, ChannelType.AnnouncementThread)));
+}
+
 function isAllowedChannel(message: Pick<Message, 'guildId' | 'guild' | 'channelId'> & {
   channel: Message['channel'] | ChatInputCommandInteraction['channel'];
 }, config: OpenClawConfig): boolean {
   if (message.guildId !== config.guildId || !message.channel) return false;
+  const override = config.access?.get(message.channelId)
+    ?? (message.channel.isThread() && message.channel.parentId ? config.access?.get(message.channel.parentId) : undefined);
+  if (override !== undefined) return override;
   if (config.channelIds.includes(message.channelId) || (message.channel.isThread() && !!message.channel.parentId && config.channelIds.includes(message.channel.parentId))) return true;
   if (!config.publicChannels || !message.guild || message.channel.type === ChannelType.PrivateThread) return false;
   const channel = message.channel.isThread() ? message.channel.parent : message.channel;
@@ -71,7 +89,7 @@ export function createOpenClaw(client: Client, agent: OpenClawClient, config: Op
       if ('sendTyping' in message.channel) await message.channel.sendTyping().catch(() => {});
       const response = await agent.reply({ session: `threesixty:${client.user!.id}:${config.guildId}:${message.channelId}`, content: prompt }, shutdown.signal);
       for (const chunk of replyChunks(response)) {
-        if (shutdown.signal.aborted) return;
+        if (shutdown.signal.aborted || !isAllowedMessage(message, config)) return;
         await message.reply({ content: chunk, allowedMentions });
         sent = true;
       }
@@ -95,7 +113,7 @@ export function createOpenClaw(client: Client, agent: OpenClawClient, config: Op
       data: tclawCommandData,
       async execute(interaction) {
         if (!isAllowedChannel(interaction, config)) {
-          await interaction.reply({ content: 'OpenClaw is not enabled in this channel.', flags: MessageFlags.Ephemeral });
+          await interaction.reply({ content: 'OpenClaw is not enabled in this channel. An administrator can use /tclaw-channel enable.', flags: MessageFlags.Ephemeral });
           return;
         }
         const content = interaction.options.getString('prompt', true).trim();
@@ -118,6 +136,10 @@ export function createOpenClaw(client: Client, agent: OpenClawClient, config: Op
             }, shutdown.signal);
             for (const chunk of replyChunks(response)) {
               if (shutdown.signal.aborted) return;
+              if (!isAllowedChannel(interaction, config)) {
+                await interaction.editReply({ content: 'OpenClaw was disabled in this channel.', allowedMentions });
+                return;
+              }
               if (!sent) await interaction.editReply({ content: chunk, allowedMentions });
               else await interaction.followUp({ content: chunk, allowedMentions });
               sent = true;
@@ -131,6 +153,42 @@ export function createOpenClaw(client: Client, agent: OpenClawClient, config: Op
         })().finally(() => { active.delete(interaction.channelId); });
         active.set(interaction.channelId, work);
         await work;
+      },
+    }, {
+      data: tclawChannelCommandData,
+      async execute(interaction) {
+        if (interaction.guildId !== config.guildId || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+          await interaction.reply({ content: 'Only server administrators can configure OpenClaw channels.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+        if (!config.access) throw new Error('OpenClaw channel settings are unavailable');
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const selected = interaction.options.getChannel('channel');
+        const channel = await client.channels.fetch(selected?.id ?? interaction.channelId);
+        if (!channel || !('guildId' in channel) || channel.guildId !== config.guildId || !channel.isTextBased() || !('permissionsFor' in channel)) {
+          await interaction.editReply('Choose an accessible text channel in this server.');
+          return;
+        }
+        const action = interaction.options.getSubcommand();
+        if (action === 'enable') {
+          const member = await channel.guild.members.fetchMe();
+          const sendPermission = channel.isThread() ? PermissionFlagsBits.SendMessagesInThreads : PermissionFlagsBits.SendMessages;
+          if (!channel.permissionsFor(member)?.has([PermissionFlagsBits.ViewChannel, sendPermission])) {
+            await interaction.editReply('I need View Channel and Send Messages permissions in that channel.');
+            return;
+          }
+          config.access.set(channel.id, true);
+        }
+        else if (action === 'disable') config.access.set(channel.id, false);
+        else if (action === 'reset') config.access.reset(channel.id);
+        const enabled = isAllowedChannel({ guildId: config.guildId, guild: interaction.guild, channelId: channel.id, channel }, config);
+        const override = config.access.get(channel.id);
+        await interaction.editReply({
+          content: `OpenClaw is ${enabled ? 'enabled' : 'disabled'} in <#${channel.id}> (${override === undefined ? 'inherited/default setting' : 'channel override'}).`
+            + (enabled ? ' Addressed messages and reply context are sent to OpenClaw and its model backend.' : '')
+            + (!channel.isThread() ? ' Channel overrides also apply to its threads unless a thread has its own override.' : ''),
+          allowedMentions,
+        });
       },
     }],
     intents: [GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],

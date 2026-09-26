@@ -4,14 +4,14 @@ import { createLogger } from './logger.js';
 import { commands } from './commands.js';
 import { activityCommandData, summaryCommandData } from './modules/activity-analysis/index.js';
 
-import { tclawCommandData } from './modules/openclaw/index.js';
+import { tclawCommandData, tclawChannelCommandData } from './modules/openclaw/index.js';
 
 import { resetsCommandData } from './modules/reset-announcements/index.js';
 
 const body = [...commands.values()].map(command => command.data.toJSON());
 body.push(resetsCommandData.toJSON());
 if (loadFeatures().ACTIVITY_ANALYSIS_ENABLED) body.push(activityCommandData.toJSON(), summaryCommandData.toJSON());
-if (loadFeatures().OPENCLAW_ENABLED) body.push(tclawCommandData.toJSON());
+if (loadFeatures().OPENCLAW_ENABLED) body.push(tclawCommandData.toJSON(), tclawChannelCommandData.toJSON());
 // Dry run validates command definitions without credentials or a Discord request.
 if (process.argv.includes('--dry-run')) {
   console.log(JSON.stringify(body, null, 2));

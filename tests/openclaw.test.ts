@@ -34,7 +34,7 @@ function fixture(agent?: OpenClawClient) {
 
 test('OpenClaw config is opt-in and validates required settings without exposing secrets', () => {
   assert.equal(loadConfig(env).OPENCLAW_ENABLED, false);
-  assert.throws(() => loadConfig({ ...env, OPENCLAW_ENABLED: 'true' }), /OPENCLAW_TOKEN.*OPENCLAW_CHANNEL_IDS/);
+  assert.throws(() => loadConfig({ ...env, OPENCLAW_ENABLED: 'true' }), /OPENCLAW_TOKEN/);
   const config = loadConfig({ ...env, OPENCLAW_ENABLED: 'true', OPENCLAW_TOKEN: 'gateway-secret', OPENCLAW_CHANNEL_IDS: channelId });
   assert.deepEqual(config.OPENCLAW_CHANNEL_IDS, [channelId]);
   assert.equal(loadConfig({ ...env, OPENCLAW_ENABLED: 'true', OPENCLAW_TOKEN: 'gateway-secret', OPENCLAW_PUBLIC_CHANNELS: 'true' }).OPENCLAW_PUBLIC_CHANNELS, true);

@@ -31,7 +31,6 @@ const schema = features.extend({
 }).superRefine((config, context) => {
   if (!config.OPENCLAW_ENABLED) return;
   if (!config.OPENCLAW_TOKEN) context.addIssue({ code: 'custom', path: ['OPENCLAW_TOKEN'], message: 'Required when OpenClaw is enabled' });
-  if (!config.OPENCLAW_PUBLIC_CHANNELS && !config.OPENCLAW_CHANNEL_IDS.length) context.addIssue({ code: 'custom', path: ['OPENCLAW_CHANNEL_IDS'], message: 'At least one channel or OPENCLAW_PUBLIC_CHANNELS=true is required when OpenClaw is enabled' });
 });
 
 export type Config = z.infer<typeof schema>;

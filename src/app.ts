@@ -6,6 +6,7 @@ import type { Logger } from 'pino';
 import type { Config } from './config.js';
 import type { BotModule } from './core/module.js';
 import { DestinationController } from './core/destination.js';
+import { openChannelAccessStore } from './storage/channel-access-store.js';
 import { openDestinationStore } from './storage/destination-store.js';
 import { openSummaryDeliveryStore } from './storage/summary-delivery-store.js';
 import { openActivityStore } from './storage/activity-store.js';
@@ -23,10 +24,14 @@ export function composeModules(client: Client, config: Config, logger: Logger) {
   const closers: (() => void)[] = [];
   mkdirSync(config.DATA_DIR, { recursive: true });
   try {
-    if (config.OPENCLAW_ENABLED) modules.push(createOpenClaw(client, createOpenClawClient({
+    if (config.OPENCLAW_ENABLED) {
+      const access = openChannelAccessStore(join(config.DATA_DIR, 'openclaw-settings.sqlite'), config.DISCORD_GUILD_ID);
+      closers.push(access.close);
+      modules.push(createOpenClaw(client, createOpenClawClient({
       baseUrl: config.OPENCLAW_BASE_URL, token: config.OPENCLAW_TOKEN,
       agentId: config.OPENCLAW_AGENT_ID, timeoutMs: config.OPENCLAW_TIMEOUT_SECONDS * 1000,
-    }), { guildId: config.DISCORD_GUILD_ID, channelIds: config.OPENCLAW_CHANNEL_IDS, publicChannels: config.OPENCLAW_PUBLIC_CHANNELS }, logger.child({ module: 'openclaw' })));
+    }), { guildId: config.DISCORD_GUILD_ID, channelIds: config.OPENCLAW_CHANNEL_IDS, publicChannels: config.OPENCLAW_PUBLIC_CHANNELS, access: access.store }, logger.child({ module: 'openclaw' })));
+    }
     const settings = openDestinationStore(join(config.DATA_DIR, 'settings.sqlite'));
     closers.push(settings.close);
     if (config.ACTIVITY_COLLECTOR_ENABLED || config.ACTIVITY_ANALYSIS_ENABLED) {

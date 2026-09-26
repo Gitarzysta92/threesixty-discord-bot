@@ -17,6 +17,19 @@ Discord -> this bot's openclaw module -> OpenClaw Gateway -> LiteLLM -> Qwen
 
 Activity collection still stores metadata only. This feature additionally transmits message text to OpenClaw and its model backend. OpenClaw and LiteLLM may retain transcripts/logs according to their configuration. Select channels whose participants can share conversation context and configure retention on those services.
 
+## Change channel access in Discord
+
+Administrators can configure access without editing environment variables or restarting:
+
+- `/tclaw-channel enable channel:#spam-and-fun` explicitly allows a channel, including one hidden from `@everyone`.
+- `/tclaw-channel disable` blocks OpenClaw in the current channel, even if public-channel mode or the environment allowlist includes it.
+- `/tclaw-channel status` shows effective access for the current channel.
+- `/tclaw-channel reset` removes the override and restores inherited/environment defaults.
+
+Each action accepts an optional `channel`; omit it to use the current channel. Replies to configuration commands are private. Enabling allows addressed message text and reply context to be sent to OpenClaw and its model backend. Channel overrides apply to threads unless the thread has its own override. Explicit disables suppress answers from requests still running locally; they do not erase existing remote sessions or undo requests already sent.
+
+Overrides are scoped to the guild and persisted in `DATA_DIR/openclaw-settings.sqlite`. Public-channel mode and the environment allowlist remain defaults. To start with no channels enabled, set `OPENCLAW_PUBLIC_CHANNELS=false` and leave `OPENCLAW_CHANNEL_IDS` empty, then use the admin command to enable channels. The module itself must remain enabled with a configured Gateway token.
+
 ## Configure OpenClaw and LiteLLM
 
 Run a dedicated OpenClaw instance with its own state/workspace. This repository supplies the client module, not an embedded OpenClaw runtime. This process owns the Discord connection; do not also configure OpenClaw's native Discord integration with this bot's token.
@@ -72,7 +85,7 @@ In the agent's workspace instructions, describe a concise company Discord assist
    OPENCLAW_TIMEOUT_SECONDS=60
    ```
 
-4. Restart the bot and run `npm run commands:deploy` with `OPENCLAW_ENABLED=true` to register `/tclaw`. Use `/tclaw prompt:hello` in an allowed channel, then reply to its answer. Verify silence in other channels and separate context between threads.
+4. Restart the bot and run `npm run commands:deploy` with `OPENCLAW_ENABLED=true` to register `/tclaw` and `/tclaw-channel`. Use `/tclaw prompt:hello` in an allowed channel, then reply to its answer. Verify silence in other channels and separate context between threads.
 
 The base URL points to OpenClaw, including `/v1`, not LiteLLM. The LiteLLM key stays with OpenClaw. In Docker/Coolify, `127.0.0.1` means the bot container: use the Gateway's reachable private service hostname and configure its listener/network accordingly. Use HTTPS over an untrusted network. Persist OpenClaw state separately from the bot data volume.
 
