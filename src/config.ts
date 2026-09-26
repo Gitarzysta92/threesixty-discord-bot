@@ -4,10 +4,8 @@ const snowflake = z.string().regex(/^\d{17,20}$/, 'Must be a Discord ID');
 const flag = z.enum(['true', 'false']).transform(value => value === 'true');
 const features = z.object({
   DATA_DIR: z.string().min(1).default('./data'),
-  RESETS_CHANNEL_ID: z.preprocess(value => value === '' ? undefined : value, snowflake.optional()),
   RESETS_POLL_SECONDS: z.coerce.number().int().min(60).max(86400).default(300),
   ACTIVITY_COLLECTOR_ENABLED: flag.default(true),
-  ACTIVITY_SUMMARY_CHANNEL_ID: z.preprocess(value => value === '' ? undefined : value, snowflake.optional()),
   ACTIVITY_ANALYSIS_ENABLED: flag.default(true),
   ACTIVITY_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(90),
   ACTIVITY_EXCLUDED_CHANNEL_IDS: z.string().default('').transform(value => value.split(',').map(id => id.trim()).filter(Boolean)).pipe(z.array(snowflake)),

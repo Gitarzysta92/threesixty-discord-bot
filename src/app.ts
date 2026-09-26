@@ -5,6 +5,8 @@ import type { Client } from 'discord.js';
 import type { Logger } from 'pino';
 import type { Config } from './config.js';
 import type { BotModule } from './core/module.js';
+import { DestinationController } from './core/destination.js';
+import { openDestinationStore } from './storage/destination-store.js';
 import { openSummaryDeliveryStore } from './storage/summary-delivery-store.js';
 import { openActivityStore } from './storage/activity-store.js';
 import { createCollector } from './modules/activity-collector/index.js';
@@ -17,6 +19,8 @@ export function composeModules(client: Client, config: Config, logger: Logger) {
   const closers: (() => void)[] = [];
   mkdirSync(config.DATA_DIR, { recursive: true });
   try {
+    const settings = openDestinationStore(join(config.DATA_DIR, 'settings.sqlite'));
+    closers.push(settings.close);
     if (config.ACTIVITY_COLLECTOR_ENABLED || config.ACTIVITY_ANALYSIS_ENABLED) {
       const store = openActivityStore(join(config.DATA_DIR, 'activity.sqlite'));
       closers.push(store.close);
@@ -24,32 +28,50 @@ export function composeModules(client: Client, config: Config, logger: Logger) {
         guildId: config.DISCORD_GUILD_ID, excludedChannelIds: config.ACTIVITY_EXCLUDED_CHANNEL_IDS, retentionDays: config.ACTIVITY_RETENTION_DAYS,
       }, logger.child({ module: 'activity-collector' })));
       if (config.ACTIVITY_ANALYSIS_ENABLED) {
-        const channelId = config.ACTIVITY_SUMMARY_CHANNEL_ID;
-        const destination = `${config.DISCORD_GUILD_ID}:${channelId}`;
-        const deliveries = channelId ? openSummaryDeliveryStore(join(config.DATA_DIR, 'summaries.sqlite'), destination) : undefined;
-        if (deliveries) closers.push(deliveries.close);
-        modules.push(createAnalysis(store.reader, config.DISCORD_GUILD_ID, config.ACTIVITY_RETENTION_DAYS,
-          deliveries && channelId ? {
-            store: deliveries.store, destination, logger: logger.child({ module: 'activity-analysis' }),
-            publisher: {
-              async publish(content, nonce) {
-                const channel = await client.channels.fetch(channelId);
-                if (!channel || !('guildId' in channel) || channel.guildId !== config.DISCORD_GUILD_ID || !channel.isSendable()) {
-                  throw new Error('Summary destination must be a sendable company-server channel');
-                }
-                await channel.send({ content, nonce, enforceNonce: true, allowedMentions: { parse: [] } });
+        const deliveries = new Map<string, ReturnType<typeof openSummaryDeliveryStore>>();
+        modules.push(createAnalysis(store.reader, config.DISCORD_GUILD_ID, config.ACTIVITY_RETENTION_DAYS, {
+          client,
+          destination: new DestinationController(settings.forModule(config.DISCORD_GUILD_ID, 'activity-summary')),
+          logger: logger.child({ module: 'activity-analysis' }),
+          dependenciesFor(channelId, enabledAt) {
+            const destination = `${config.DISCORD_GUILD_ID}:${channelId}`;
+            let delivery = deliveries.get(channelId);
+            if (!delivery) {
+              delivery = openSummaryDeliveryStore(join(config.DATA_DIR, 'summaries.sqlite'), destination, enabledAt);
+              deliveries.set(channelId, delivery);
+              closers.push(delivery.close);
+            }
+            return {
+              store: delivery.store, destination,
+              publisher: {
+                async publish(content, nonce) {
+                  const channel = await client.channels.fetch(channelId);
+                  if (!channel || !('guildId' in channel) || channel.guildId !== config.DISCORD_GUILD_ID || !channel.isSendable()) {
+                    throw new Error('Summary destination must be a sendable company-server channel');
+                  }
+                  await channel.send({ content, nonce, enforceNonce: true, allowedMentions: { parse: [] } });
+                },
               },
-            },
-          } : undefined));
+            };
+          },
+        }));
       }
     }
-    if (config.RESETS_CHANNEL_ID) {
-      const delivery = openDeliveryStore(join(config.DATA_DIR, 'resets.sqlite'), `${config.DISCORD_GUILD_ID}:${config.RESETS_CHANNEL_ID}`);
-      closers.push(delivery.close);
-      modules.push(createResetAnnouncements(client, delivery.store, {
-        guildId: config.DISCORD_GUILD_ID, channelId: config.RESETS_CHANNEL_ID, pollSeconds: config.RESETS_POLL_SECONDS,
-      }, logger.child({ module: 'reset-announcements' })));
-    }
+    const resetDeliveries = new Map<string, ReturnType<typeof openDeliveryStore>>();
+    modules.push(createResetAnnouncements(client,
+      new DestinationController(settings.forModule(config.DISCORD_GUILD_ID, 'resets')),
+      channelId => {
+        let delivery = resetDeliveries.get(channelId);
+        if (!delivery) {
+          delivery = openDeliveryStore(join(config.DATA_DIR, 'resets.sqlite'), `${config.DISCORD_GUILD_ID}:${channelId}`);
+          resetDeliveries.set(channelId, delivery);
+          closers.push(delivery.close);
+        }
+        return delivery.store;
+      },
+      { guildId: config.DISCORD_GUILD_ID, pollSeconds: config.RESETS_POLL_SECONDS },
+      logger.child({ module: 'reset-announcements' }),
+    ));
   } catch (error) {
     for (const close of closers.reverse()) close();
     throw error;

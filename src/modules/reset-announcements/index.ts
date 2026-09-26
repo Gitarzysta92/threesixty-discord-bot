@@ -5,24 +5,31 @@ import type { BotModule } from '../../core/module.js';
 import { createResetSource, RetryLater } from './api.js';
 import type { DeliveryStore } from './store.js';
 import { createResetPoller } from './service.js';
+import type { DestinationController } from '../../core/destination.js';
+import { createDestinationCommand, destinationCommandData } from '../../core/destination-command.js';
 
-export function createResetAnnouncements(client: Client, store: DeliveryStore, config: { guildId: string; channelId: string; pollSeconds: number }, logger: Logger): BotModule {
+export const resetsCommandData = destinationCommandData('resets', 'Configure automatic Codex reset announcements');
+
+export function createResetAnnouncements(client: Client, destination: DestinationController, storeFor: (channelId: string) => DeliveryStore, config: { guildId: string; pollSeconds: number }, logger: Logger): BotModule {
   let timer: NodeJS.Timeout | undefined;
   let active: Promise<void> | undefined;
   let stopped = true;
   const abort = new AbortController();
-  const poll = createResetPoller(createResetSource(fetch, abort.signal), store, {
-    async publish(item) {
-      const channel = await client.channels.fetch(config.channelId);
-      if (!channel || !('guildId' in channel) || channel.guildId !== config.guildId || !channel.isSendable()) {
-        throw new Error('Reset destination must be a sendable channel in the company server');
-      }
-      abort.signal.throwIfAborted();
-      const nonce = createHash('sha256').update(`${config.channelId}:${item.nonce}`).digest('hex').slice(0, 24);
-      await channel.send({ content: item.content, allowedMentions: { parse: [] }, nonce, enforceNonce: true });
-      logger.info({ announcement: item.key }, 'Reset announcement delivered');
-    },
-  }, abort.signal);
+  const source = createResetSource(fetch, abort.signal);
+  const poll = () => destination.deliver(async ({ channelId }) => {
+    await createResetPoller(source, storeFor(channelId), {
+      async publish(item) {
+        const channel = await client.channels.fetch(channelId);
+        if (!channel || !('guildId' in channel) || channel.guildId !== config.guildId || !channel.isSendable()) {
+          throw new Error('Reset destination must be a sendable channel in the company server');
+        }
+        abort.signal.throwIfAborted();
+        const nonce = createHash('sha256').update(`${channelId}:${item.nonce}`).digest('hex').slice(0, 24);
+        await channel.send({ content: item.content, allowedMentions: { parse: [] }, nonce, enforceNonce: true });
+        logger.info({ announcement: item.key }, 'Reset announcement delivered');
+      },
+    }, abort.signal)();
+  });
   const run = () => {
     active = (async () => {
       let delay = config.pollSeconds * 1000;
@@ -35,8 +42,9 @@ export function createResetAnnouncements(client: Client, store: DeliveryStore, c
     })();
   };
   return {
-    id: 'reset-announcements', intents: [], commands: [],
+    id: 'reset-announcements', intents: [],
+    commands: [createDestinationCommand(resetsCommandData, client, config.guildId, destination, `Checks every ${config.pollSeconds / 60} minutes. The next check posts the latest reset for a new destination.`)],
     async start() { stopped = false; run(); },
-    async stop() { stopped = true; clearTimeout(timer); abort.abort(); await active; },
+    async stop() { stopped = true; clearTimeout(timer); abort.abort(); await active; await destination.drain(); },
   };
 }

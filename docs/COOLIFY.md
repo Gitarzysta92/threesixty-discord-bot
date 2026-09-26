@@ -9,10 +9,8 @@ Set these runtime variables in Coolify (never as build arguments):
 - `DISCORD_TOKEN`: token of a dedicated Discord bot application.
 - `DISCORD_APPLICATION_ID`: its application ID.
 - `DISCORD_GUILD_ID`: the company server ID.
-- `RESETS_CHANNEL_ID`: reset announcement destination.
-- `ACTIVITY_SUMMARY_CHANNEL_ID`: weekly summary destination.
 
-The last two can be empty to disable their scheduled posts. Polling defaults to 300 seconds; summaries run Sundays at 12:00 Europe/Warsaw. Other optional settings are documented in `.env.example`. Keep `DATA_DIR=/app/data`; the Compose `bot-data` named volume holds all three SQLite databases and must persist across deployments. A fresh named volume inherits ownership from the image's `/app/data` directory. A manually supplied bind mount must be writable by UID 1000.
+Configure destinations from Discord after registering commands: `/resets enable` and `/activity-summary enable`, optionally selecting a `channel`. Both start disabled and support `status` and `disable`; changes require no restart. Polling defaults to 300 seconds; summaries run Sundays at 12:00 Europe/Warsaw. Other optional settings are documented in `.env.example`. Keep `DATA_DIR=/app/data`; the Compose `bot-data` named volume holds the SQLite databases, including channel settings and must persist across deployments. A fresh named volume inherits ownership from the image's `/app/data` directory. A manually supplied bind mount must be writable by UID 1000.
 
 Run only one instance. Keep preview deployments and automatic deployments disabled until explicitly configured. No HTTP health check is applicable: verify `Bot ready` in logs and `/ping` in Discord. A container running does not alone prove Discord readiness. Coolify's HTTP health-check setting should remain off.
 

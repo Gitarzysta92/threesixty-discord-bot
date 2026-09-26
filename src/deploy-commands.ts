@@ -2,10 +2,13 @@ import { REST, Routes } from 'discord.js';
 import { loadConfig, loadFeatures } from './config.js';
 import { createLogger } from './logger.js';
 import { commands } from './commands.js';
-import { activityCommandData } from './modules/activity-analysis/index.js';
+import { activityCommandData, summaryCommandData } from './modules/activity-analysis/index.js';
+
+import { resetsCommandData } from './modules/reset-announcements/index.js';
 
 const body = [...commands.values()].map(command => command.data.toJSON());
-if (loadFeatures().ACTIVITY_ANALYSIS_ENABLED) body.push(activityCommandData.toJSON());
+body.push(resetsCommandData.toJSON());
+if (loadFeatures().ACTIVITY_ANALYSIS_ENABLED) body.push(activityCommandData.toJSON(), summaryCommandData.toJSON());
 // Dry run validates command definitions without credentials or a Discord request.
 if (process.argv.includes('--dry-run')) {
   console.log(JSON.stringify(body, null, 2));

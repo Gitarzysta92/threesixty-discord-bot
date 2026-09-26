@@ -52,7 +52,6 @@ test('feature flags are independent and configuration rejects unsafe polling int
   const config = loadFeatures({ ACTIVITY_COLLECTOR_ENABLED: 'false', ACTIVITY_ANALYSIS_ENABLED: 'true' });
   assert.equal(config.ACTIVITY_COLLECTOR_ENABLED, false);
   assert.equal(config.ACTIVITY_ANALYSIS_ENABLED, true);
-  assert.equal(loadFeatures({ RESETS_CHANNEL_ID: '' }).RESETS_CHANNEL_ID, undefined);
   assert.throws(() => loadFeatures({ RESETS_POLL_SECONDS: '0' }));
   assert.throws(() => loadFeatures({ ACTIVITY_COLLECTOR_ENABLED: 'yes' }));
 });

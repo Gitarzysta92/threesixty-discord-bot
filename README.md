@@ -11,7 +11,7 @@ Foundation for a multipurpose company Discord bot. TypeScript, discord.js, Node.
 5. Run `cp .env.example .env` and fill in the token, application ID, and server ID. Keep `.env` private.
 6. Run `npm run commands:deploy`, then `npm run dev`.
 7. In your server, try `/ping`, `/help`, `/status`, and `/activity days:7` (the last two are administrators only).
-8. Set `RESETS_CHANNEL_ID` to an existing text or announcement channel and restart to enable automatic reset posts. The first poll posts the latest known reset and any scheduled reset; it does not flood the channel with history.
+8. As a server administrator, run `/resets enable` in the destination channel, or `/resets enable channel:#resets`. Changes are saved without a restart. The first poll posts the latest known reset and any scheduled reset; it does not flood the channel with history.
 
 Activity collection and analysis are enabled independently by `ACTIVITY_COLLECTOR_ENABLED` and `ACTIVITY_ANALYSIS_ENABLED`. Configure excluded channels and retention in `.env`. Statistics begin when collection starts; message text is never stored. Keep `DATA_DIR` on persistent storage. See [module architecture and task ownership](docs/ARCHITECTURE.md) for boundaries, contracts, and operational details.
 
@@ -64,6 +64,8 @@ Before production, verify installation, all enabled commands, reset delivery, ad
 
 ## Weekly summaries
 
-Set `ACTIVITY_SUMMARY_CHANNEL_ID` in `.env` to the destination channel and restart the bot. With activity analysis enabled, it posts **every Sunday at 12:00 noon, Europe/Warsaw**, automatically adjusting for daylight saving. Reports cover Sunday noon to Sunday noon. Use a channel whose members should have access to server-wide statistics and grant the bot View Channel and Send Messages.
+As a server administrator, run `/activity-summary enable` in the destination channel, or select one with its `channel` option. With activity analysis enabled, it posts **every Sunday at 12:00 noon, Europe/Warsaw**, automatically adjusting for daylight saving. Reports cover Sunday noon to Sunday noon. Use a channel whose members should have access to server-wide statistics and grant the bot View Channel and Send Messages.
 
-The scheduler checks once per minute, retries failed sends, and persists delivery receipts in `DATA_DIR/summaries.sqlite`. First enablement waits for the next Sunday; after downtime, only the latest missed report is sent. Leave the channel ID empty to disable scheduled posts; `/activity` remains available.
+The scheduler checks once per minute, retries failed sends, and persists delivery receipts in `DATA_DIR/summaries.sqlite`. Enabling or moving summaries waits for the next Sunday; after downtime, only the latest missed report is sent. Use `/activity-summary disable` to stop scheduled posts; `/activity` remains available.
+
+Both destinations start disabled. `/resets status` and `/activity-summary status` show their settings; both commands support `disable`. Settings persist in `DATA_DIR/settings.sqlite`. Reset polling remains every five minutes, and enabling takes effect on the next check. The bot validates channel type and its View Channel and Send Messages permissions before saving a destination.
