@@ -10,3 +10,7 @@
 !scripts/**
 !tests/
 !tests/**
+!deployment/
+!deployment/openclaw/
+!deployment/openclaw/channel-policy/
+!deployment/openclaw/channel-policy/**
