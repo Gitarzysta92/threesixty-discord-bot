@@ -8,7 +8,7 @@ Discord -> this bot's openclaw module -> OpenClaw Gateway -> LiteLLM -> Qwen
 
 ## Behavior
 
-- Disabled by default. Only configured company-server channels are eligible; allowing a parent also allows its accessible threads.
+- Disabled by default. Set `OPENCLAW_PUBLIC_CHANNELS=true` to include all company-server channels visible to `@everyone`, plus public threads in those channels. Private threads and channels hidden from `@everyone` are excluded. Alternatively, explicit `OPENCLAW_CHANNEL_IDS` allow chosen channels and their accessible threads, including private ones. Leave that list empty for public-only participation.
 - Responds to direct bot mentions and same-channel replies to this bot. Other bots, webhooks, system messages, role/everyone mentions and ordinary conversation do not trigger answers.
 - Sends the addressed message (up to 4,000 characters), author ID and the referenced same-channel message when available (up to 2,000 characters). It does not scan surrounding history or send attachments.
 - Each channel/thread has a separate stable OpenClaw session shared by its participants. OpenClaw controls session persistence and retention.
@@ -67,7 +67,8 @@ In the agent's workspace instructions, describe a concise company Discord assist
    OPENCLAW_BASE_URL=http://your-openclaw-host:18789/v1
    OPENCLAW_TOKEN=your-gateway-token
    OPENCLAW_AGENT_ID=discord
-   OPENCLAW_CHANNEL_IDS=123456789012345678,234567890123456789
+   OPENCLAW_PUBLIC_CHANNELS=true
+   OPENCLAW_CHANNEL_IDS=
    OPENCLAW_TIMEOUT_SECONDS=60
    ```
 

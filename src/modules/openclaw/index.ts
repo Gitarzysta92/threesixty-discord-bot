@@ -1,14 +1,18 @@
-import { Events, GatewayIntentBits } from 'discord.js';
+import { ChannelType, Events, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
 import type { Client, Message, MessageMentionOptions } from 'discord.js';
 import type { Logger } from 'pino';
 import type { BotModule } from '../../core/module.js';
 import type { OpenClawClient } from './api.js';
 
-interface OpenClawConfig { guildId: string; channelIds: readonly string[] }
+interface OpenClawConfig { guildId: string; channelIds: readonly string[]; publicChannels?: boolean }
 
 export function isAllowedMessage(message: Message, config: OpenClawConfig): boolean {
-  return message.guildId === config.guildId && !message.author.bot && !message.webhookId && !message.system &&
-    (config.channelIds.includes(message.channelId) || (message.channel.isThread() && !!message.channel.parentId && config.channelIds.includes(message.channel.parentId)));
+  if (message.guildId !== config.guildId || message.author.bot || message.webhookId || message.system) return false;
+  if (config.channelIds.includes(message.channelId) || (message.channel.isThread() && !!message.channel.parentId && config.channelIds.includes(message.channel.parentId))) return true;
+  if (!config.publicChannels || !message.guild || message.channel.type === ChannelType.PrivateThread) return false;
+  const channel = message.channel.isThread() ? message.channel.parent : message.channel;
+  return !!channel && 'permissionsFor' in channel &&
+    (channel.permissionsFor(message.guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel) ?? false);
 }
 
 /** Discord messages use UTF-16 length limits; preserve surrogate pairs at boundaries. */

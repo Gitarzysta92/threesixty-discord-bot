@@ -19,6 +19,7 @@ const schema = features.extend({
   DISCORD_GUILD_ID: snowflake,
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
   OPENCLAW_ENABLED: flag.default(false),
+  OPENCLAW_PUBLIC_CHANNELS: flag.default(false),
   OPENCLAW_BASE_URL: z.string().default('http://127.0.0.1:18789/v1').refine(value => {
     try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash; }
     catch { return false; }
@@ -30,7 +31,7 @@ const schema = features.extend({
 }).superRefine((config, context) => {
   if (!config.OPENCLAW_ENABLED) return;
   if (!config.OPENCLAW_TOKEN) context.addIssue({ code: 'custom', path: ['OPENCLAW_TOKEN'], message: 'Required when OpenClaw is enabled' });
-  if (!config.OPENCLAW_CHANNEL_IDS.length) context.addIssue({ code: 'custom', path: ['OPENCLAW_CHANNEL_IDS'], message: 'At least one channel is required when OpenClaw is enabled' });
+  if (!config.OPENCLAW_PUBLIC_CHANNELS && !config.OPENCLAW_CHANNEL_IDS.length) context.addIssue({ code: 'custom', path: ['OPENCLAW_CHANNEL_IDS'], message: 'At least one channel or OPENCLAW_PUBLIC_CHANNELS=true is required when OpenClaw is enabled' });
 });
 
 export type Config = z.infer<typeof schema>;

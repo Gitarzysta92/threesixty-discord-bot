@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
 import { setImmediate } from 'node:timers/promises';
-import { Events, GatewayIntentBits } from 'discord.js';
+import { ChannelType, Events, GatewayIntentBits, PermissionsBitField, PermissionFlagsBits } from 'discord.js';
 import type { Client, Message } from 'discord.js';
 import { pino } from 'pino';
 import { loadConfig } from '../src/config.js';
 import { createOpenClawClient } from '../src/modules/openclaw/api.js';
 import type { ConversationRequest, OpenClawClient } from '../src/modules/openclaw/api.js';
-import { createOpenClaw, replyChunks } from '../src/modules/openclaw/index.js';
+import { createOpenClaw, isAllowedMessage, replyChunks } from '../src/modules/openclaw/index.js';
 
 const guildId = '123456789012345678';
 const channelId = '223456789012345678';
@@ -37,10 +37,26 @@ test('OpenClaw config is opt-in and validates required settings without exposing
   assert.throws(() => loadConfig({ ...env, OPENCLAW_ENABLED: 'true' }), /OPENCLAW_TOKEN.*OPENCLAW_CHANNEL_IDS/);
   const config = loadConfig({ ...env, OPENCLAW_ENABLED: 'true', OPENCLAW_TOKEN: 'gateway-secret', OPENCLAW_CHANNEL_IDS: channelId });
   assert.deepEqual(config.OPENCLAW_CHANNEL_IDS, [channelId]);
+  assert.equal(loadConfig({ ...env, OPENCLAW_ENABLED: 'true', OPENCLAW_TOKEN: 'gateway-secret', OPENCLAW_PUBLIC_CHANNELS: 'true' }).OPENCLAW_PUBLIC_CHANNELS, true);
   assert.throws(() => loadConfig({ ...env, OPENCLAW_BASE_URL: 'https://secret@example.com/v1' }), error => {
     assert.ok(error instanceof Error); assert.ok(!error.message.includes('secret@')); return true;
   });
   assert.throws(() => loadConfig({ ...env, OPENCLAW_TIMEOUT_SECONDS: '0' }), /OPENCLAW_TIMEOUT_SECONDS/);
+});
+
+test('all-public mode follows everyone visibility and excludes private channels and threads', () => {
+  const f = fixture();
+  const config = { guildId, channelIds: [], publicChannels: true };
+  const guild = { roles: { everyone: { id: guildId } } };
+  const publicParent = { permissionsFor: () => new PermissionsBitField(PermissionFlagsBits.ViewChannel) };
+  const privateParent = { permissionsFor: () => new PermissionsBitField() };
+  assert.equal(isAllowedMessage(f.message({ guild, channel: { isThread: () => false, ...publicParent } }), config), true);
+  assert.equal(isAllowedMessage(f.message({ guild, channel: { isThread: () => false, ...privateParent } }), config), false);
+  assert.equal(isAllowedMessage(f.message({ guild, channel: { isThread: () => true, parent: publicParent, type: ChannelType.PublicThread } }), config), true);
+  assert.equal(isAllowedMessage(f.message({ guild, channel: { isThread: () => true, parent: publicParent, type: ChannelType.PrivateThread } }), config), false);
+  assert.equal(isAllowedMessage(f.message({ guild, channel: { isThread: () => true, parent: privateParent, type: ChannelType.PublicThread } }), config), false);
+  assert.equal(isAllowedMessage(f.message({ guild, channel: { isThread: () => true, parent: null } }), config), false);
+  assert.equal(isAllowedMessage(f.message({ guild, guildId: 'other', channel: { isThread: () => false, ...publicParent } }), config), false);
 });
 
 test('only addressed human messages in allowed guild channels or threads reach OpenClaw', async () => {
