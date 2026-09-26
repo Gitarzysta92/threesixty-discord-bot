@@ -1,6 +1,6 @@
 # ThreeSixty Discord Bot
 
-Foundation for a multipurpose company Discord bot. TypeScript, discord.js, Node.js 22.13+, and npm. Restricted to one configured company server.
+Foundation for a multipurpose company Discord bot. TypeScript, discord.js, Node.js 22.19+, and npm. Restricted to one configured company server.
 
 ## Setup
 
@@ -78,4 +78,4 @@ The refresh has an eight-minute budget and respects Discord rate limits. Missing
 
 ## AI channel participation
 
-The optional `openclaw` module lets members use `/tclaw prompt:<question>`, mention or reply to the bot in configured channels. Administrators can enable or disable channels live with `/tclaw-channel`; overrides persist across restarts. It connects to a separate OpenClaw Gateway, which can use Qwen through LiteLLM. It is disabled by default and requires Message Content Intent. Addressed message text and same-channel reply context are sent to the agent; activity storage remains metadata-only. See [OpenClaw setup](docs/OPENCLAW.md) for configuration, channel allowlists, conversation behavior and deployment.
+The optional `openclaw` module delegates chat to OpenClaw’s native Discord integration. Mention the bot to invite it into a five-minute conversation window with native recent-message history. `/tclaw` provides a private reminder in native mode. Administrators can enable or disable channels live with `/tclaw-channel`; overrides persist across restarts. It connects to a separate OpenClaw Gateway, which can use Qwen through LiteLLM. It is disabled by default and requires Message Content Intent. Addressed message text and same-channel reply context are sent to the agent; activity storage remains metadata-only. See [OpenClaw setup](docs/OPENCLAW.md) for configuration, channel allowlists, conversation behavior and deployment.

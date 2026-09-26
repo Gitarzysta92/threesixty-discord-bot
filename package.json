@@ -5,7 +5,7 @@
   "description": "Modular Discord bot for internal company workflows",
   "type": "module",
   "engines": {
-    "node": ">=22.13.0"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "dev": "node --env-file-if-exists=.env --import tsx --watch src/index.ts",
@@ -18,6 +18,7 @@
     "commands:deploy:production": "node --env-file-if-exists=.env dist/deploy-commands.js"
   },
   "dependencies": {
+    "@openclaw/gateway-client": "^2026.9.6",
     "discord.js": "^14.27.0",
     "pino": "^10.3.1",
     "zod": "^4.6.5"

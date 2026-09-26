@@ -19,6 +19,9 @@ const schema = features.extend({
   DISCORD_APPLICATION_ID: snowflake,
   DISCORD_GUILD_ID: snowflake,
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
+  OPENCLAW_NATIVE_DISCORD: flag.default(false),
+  OPENCLAW_GATEWAY_URL: z.string().url().default('ws://threesixty-openclaw:18789').refine(value => { const url = new URL(value); return ['ws:', 'wss:'].includes(url.protocol) && !url.username && !url.password; }, 'Must be a ws/wss Gateway URL without credentials'),
+  OPENCLAW_PRIVATE_NETWORK: flag.default(false),
   OPENCLAW_PUBLIC_CHANNELS: flag.default(false),
   OPENCLAW_BASE_URL: z.string().default('http://127.0.0.1:18789/v1').refine(value => {
     try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash; }

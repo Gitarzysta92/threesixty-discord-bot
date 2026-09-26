@@ -87,8 +87,8 @@ repository. The current HTTP bridge exposes only a subset of the native Discord
 integration. Check the installed Gateway version before extending the bridge;
 keep any necessary custom code limited to integration and access enforcement.
 
-The installed OpenClaw documentation describes native Discord ambient room events
-(`messages.groupChat.unmentionedInbound: "room_event"`) and explicit message-tool
-delivery, as well as native history and thread-bound sessions. These are not enabled
-by the current HTTP bridge. A timed, mention-triggered participation window has not
-yet been identified as a native configuration option; do not claim it is deployed.
+Native Discord mode uses the official Gateway client SDK to synchronize channel
+access and disables the legacy reply handler. OpenClaw owns history, sessions,
+message grouping, ambient participation, and delivery. The small deployment plugin
+adds only exact-channel admission, a five-minute mention window, and current-channel
+read/send tool restrictions. It does not duplicate OpenClaw conversation handling.

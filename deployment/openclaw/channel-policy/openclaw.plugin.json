@@ -1,0 +1,15 @@
+{
+  "id": "threesixty-channel-policy",
+  "name": "ThreeSixty channel admission",
+  "description": "Exact channel access and a short mention-triggered participation window. Conversation handling stays native.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["guildId", "botId"],
+    "properties": {
+      "guildId": { "type": "string" },
+      "botId": { "type": "string" },
+      "windowSeconds": { "type": "integer", "minimum": 10, "maximum": 3600, "default": 300 }
+    }
+  }
+}

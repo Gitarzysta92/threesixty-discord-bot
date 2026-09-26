@@ -3,9 +3,10 @@ import type { ChatInputCommandInteraction, Client, Message, MessageMentionOption
 import type { Logger } from 'pino';
 import type { ChannelAccessStore } from '../../core/channel-access.js';
 import type { BotModule } from '../../core/module.js';
+import type { NativeGateway, NativeChannelPolicy } from './gateway.js';
 import type { OpenClawClient } from './api.js';
 
-interface OpenClawConfig { guildId: string; channelIds: readonly string[]; publicChannels?: boolean; access?: ChannelAccessStore }
+interface OpenClawConfig { guildId: string; channelIds: readonly string[]; publicChannels?: boolean; access?: ChannelAccessStore; native?: NativeGateway }
 
 export const tclawCommandData = new SlashCommandBuilder()
   .setName('tclaw').setDescription('Talk to OpenClaw in this channel')
@@ -63,6 +64,27 @@ export function createOpenClaw(client: Client, agent: OpenClawClient, config: Op
   let stopped = true;
   const allowedMentions: MessageMentionOptions = { parse: [], repliedUser: false };
 
+  let policyTimer: ReturnType<typeof setTimeout> | undefined;
+  let syncing = Promise.resolve();
+  function syncNative() {
+    const run = syncing.then(async () => {
+      if (!config.native) return;
+      const guild = client.guilds.cache.get(config.guildId);
+      if (!guild) throw new Error('Configured guild unavailable');
+      const channels: Record<string, NativeChannelPolicy> = { '*': { enabled: false, requireMention: true } };
+      for (const channel of guild.channels.cache.values()) {
+        if (!channel.isTextBased()) continue;
+        channels[channel.id] = { enabled: isAllowedChannel({ guild, guildId: guild.id, channelId: channel.id, channel }, config), requireMention: false };
+      }
+      await config.native.sync(config.guildId, channels);
+    });
+    syncing = run.catch(() => {});
+    return run;
+  }
+  const policyChanged = () => {
+    clearTimeout(policyTimer);
+    policyTimer = setTimeout(() => { void syncNative().catch(() => logger.warn('OpenClaw channel policy sync failed')); }, 500);
+  };
   async function respond(message: Message) {
     const botId = client.user?.id;
     if (!botId) return;
@@ -112,6 +134,10 @@ export function createOpenClaw(client: Client, agent: OpenClawClient, config: Op
     id: 'openclaw', commands: [{
       data: tclawCommandData,
       async execute(interaction) {
+        if (config.native) {
+          await interaction.reply({ content: `Mention <@${client.user!.id}> in this channel to chat with OpenClaw using native channel history.`, flags: MessageFlags.Ephemeral, allowedMentions });
+          return;
+        }
         if (!isAllowedChannel(interaction, config)) {
           await interaction.reply({ content: 'OpenClaw is not enabled in this channel. An administrator can use /tclaw-channel enable.', flags: MessageFlags.Ephemeral });
           return;
@@ -170,6 +196,7 @@ export function createOpenClaw(client: Client, agent: OpenClawClient, config: Op
           return;
         }
         const action = interaction.options.getSubcommand();
+        const previous = config.access.get(channel.id);
         if (action === 'enable') {
           const member = await channel.guild.members.fetchMe();
           const sendPermission = channel.isThread() ? PermissionFlagsBits.SendMessagesInThreads : PermissionFlagsBits.SendMessages;
@@ -181,21 +208,44 @@ export function createOpenClaw(client: Client, agent: OpenClawClient, config: Op
         }
         else if (action === 'disable') config.access.set(channel.id, false);
         else if (action === 'reset') config.access.reset(channel.id);
+        if (action !== 'status' && config.native) {
+          try { await syncNative(); }
+          catch {
+            if (previous === undefined) config.access.reset(channel.id); else config.access.set(channel.id, previous);
+            throw new Error('OpenClaw did not confirm the access change; local settings restored.');
+          }
+        }
         const enabled = isAllowedChannel({ guildId: config.guildId, guild: interaction.guild, channelId: channel.id, channel }, config);
         const override = config.access.get(channel.id);
         await interaction.editReply({
           content: `OpenClaw is ${enabled ? 'enabled' : 'disabled'} in <#${channel.id}> (${override === undefined ? 'inherited/default setting' : 'channel override'}).`
-            + (enabled ? ' Addressed messages and reply context are sent to OpenClaw and its model backend.' : '')
+            + (enabled ? ' OpenClaw can use recent channel history. Mentions invite it into the conversation for five minutes.' : '')
             + (!channel.isThread() ? ' Channel overrides also apply to its threads unless a thread has its own override.' : ''),
           allowedMentions,
         });
       },
     }],
     intents: [GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
-    async start() { if (!stopped) return; shutdown = new AbortController(); stopped = false; client.on(Events.MessageCreate, onMessage); },
+    async start() {
+      if (!stopped) return;
+      shutdown = new AbortController(); stopped = false;
+      if (config.native) {
+        try {
+        await config.native.start();
+        const guild = await client.guilds.fetch(config.guildId);
+        await guild.channels.fetch();
+        await guild.channels.fetchActiveThreads();
+        await syncNative();
+        for (const event of [Events.ChannelCreate, Events.ChannelUpdate, Events.ChannelDelete, Events.ThreadCreate, Events.ThreadUpdate, Events.ThreadDelete, Events.GuildRoleUpdate] as const) client.on(event, policyChanged);
+        } catch (error) { stopped = true; await config.native.stop(); throw error; }
+      } else client.on(Events.MessageCreate, onMessage);
+    },
     async stop() {
       stopped = true;
       client.off(Events.MessageCreate, onMessage);
+      for (const event of [Events.ChannelCreate, Events.ChannelUpdate, Events.ChannelDelete, Events.ThreadCreate, Events.ThreadUpdate, Events.ThreadDelete, Events.GuildRoleUpdate] as const) client.off(event, policyChanged);
+      clearTimeout(policyTimer);
+      if (config.native) { await syncing; await config.native.stop(); }
       shutdown.abort();
       await Promise.allSettled(active.values());
     },
