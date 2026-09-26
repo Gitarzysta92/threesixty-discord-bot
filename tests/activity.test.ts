@@ -23,8 +23,10 @@ test('durable collection is idempotent; analysis counts unique members and UTC d
     store.writer.record({ ...event, messageId: '3', userId: 'bob', occurredAt: start + day });
     store.writer.record({ ...event, messageId: '4', guildId: 'other' });
     store.writer.record({ ...event, messageId: '5', occurredAt: start + 2 * day });
+    store.coverage.mark('company', 'general', start, start + day);
     store.close();
     store = openActivityStore(path, start + day);
+    assert.deepEqual(store.coverage.ranges('company', 'general'), [{ from: start, until: start + day }]);
     const report = summarize(store.reader, 'company', start, start + 2 * day);
     assert.equal(report.messages, 3);
     assert.equal(report.activeMembers, 2);

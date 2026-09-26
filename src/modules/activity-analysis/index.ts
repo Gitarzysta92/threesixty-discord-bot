@@ -1,4 +1,5 @@
 import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import type { ActivityRefresher } from '../../contracts/activity-refresh.js';
 import type { ActivityReader } from '../../contracts/activity.js';
 import type { BotModule } from '../../core/module.js';
 import { summarize } from './service.js';
@@ -19,11 +20,11 @@ export interface DynamicWeeklySummary {
 }
 
 export const activityCommandData = new SlashCommandBuilder()
-  .setName('activity').setDescription('Summarize collected company-server activity')
+  .setName('activity').setDescription('Refresh message history and summarize company-server activity')
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addIntegerOption(option => option.setName('days').setDescription('Rolling window in days (default: 7)').setMinValue(1).setMaxValue(90));
 
-export function createAnalysis(reader: ActivityReader, guildId: string, retentionDays: number, weekly?: DynamicWeeklySummary): BotModule {
+export function createAnalysis(reader: ActivityReader, guildId: string, retentionDays: number, weekly?: DynamicWeeklySummary, refresher?: ActivityRefresher): BotModule {
   let timer: NodeJS.Timeout | undefined;
   let active: Promise<void> | undefined;
   let stopped = true;
@@ -48,12 +49,26 @@ export function createAnalysis(reader: ActivityReader, guildId: string, retentio
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const days = interaction.options.getInteger('days') ?? 7;
         const until = Date.now();
-        const from = Math.max(until - Math.min(days, retentionDays) * 86_400_000, reader.collectionStartedAt());
-        const result = summarize(reader, guildId, Math.min(from, until - 1), until);
-        await interaction.editReply({ content: formatSummary(result) });
+        const from = until - Math.min(days, retentionDays) * 86_400_000;
+        await interaction.editReply('Checking stored activity and refreshing missing Discord history. This may take a few minutes.');
+        let note = 'History refresh is disabled; this report uses stored observations only.';
+        if (refresher) {
+          try {
+            const refresh = await refresher.refresh(from, until);
+            note = `History checked: **${refresh.checked}** channels/threads. ` +
+              (refresh.incomplete || refresh.discoveryIncomplete
+                ? `**Partial coverage:** ${refresh.incomplete} channels/threads could not be fully checked${refresh.discoveryIncomplete ? '; channel/thread discovery was incomplete' : ''}. Check View Channel and Read Message History permissions, then retry. Completed scans are saved.`
+                : 'Accessible history is up to date for this reporting window.');
+          } catch (error) {
+            await interaction.editReply('An activity refresh could not start. Another refresh may be running; try again shortly.');
+            return;
+          }
+        }
+        const result = summarize(reader, guildId, from, until);
+        await interaction.editReply({ content: formatSummary(result, 'Activity summary', note) });
       },
     }, ...(weekly ? [createDestinationCommand(summaryCommandData, weekly.client, guildId, weekly.destination, 'Weekly summaries post Sundays at 12:00 Europe/Warsaw, starting with the next due Sunday.')] : [])],
     async start() { if (tick) { stopped = false; run(); } },
-    async stop() { stopped = true; clearTimeout(timer); await active; await weekly?.destination.drain(); },
+    async stop() { stopped = true; await refresher?.stop(); clearTimeout(timer); await active; await weekly?.destination.drain(); },
   };
 }

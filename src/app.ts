@@ -9,6 +9,8 @@ import { DestinationController } from './core/destination.js';
 import { openDestinationStore } from './storage/destination-store.js';
 import { openSummaryDeliveryStore } from './storage/summary-delivery-store.js';
 import { openActivityStore } from './storage/activity-store.js';
+import { createHistoryRefresher } from './modules/activity-collector/history.js';
+import { discordHistorySource } from './modules/activity-collector/discord-history.js';
 import { createCollector } from './modules/activity-collector/index.js';
 import { createAnalysis } from './modules/activity-analysis/index.js';
 import { createResetAnnouncements } from './modules/reset-announcements/index.js';
@@ -54,7 +56,10 @@ export function composeModules(client: Client, config: Config, logger: Logger) {
               },
             };
           },
-        }));
+        }, config.ACTIVITY_COLLECTOR_ENABLED ? createHistoryRefresher(
+          discordHistorySource(client, { guildId: config.DISCORD_GUILD_ID, excludedChannelIds: config.ACTIVITY_EXCLUDED_CHANNEL_IDS, retentionDays: config.ACTIVITY_RETENTION_DAYS }),
+          store.writer, store.coverage, config.DISCORD_GUILD_ID,
+        ) : undefined));
       }
     }
     const resetDeliveries = new Map<string, ReturnType<typeof openDeliveryStore>>();
