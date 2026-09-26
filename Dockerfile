@@ -6,6 +6,7 @@ COPY tsconfig*.json ./
 COPY src ./src
 COPY scripts ./scripts
 COPY tests ./tests
+COPY deployment/openclaw/channel-policy ./deployment/openclaw/channel-policy
 RUN npm run check
 
 FROM node:22-bookworm-slim AS runtime
