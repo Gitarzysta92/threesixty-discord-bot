@@ -41,6 +41,7 @@ export interface WeeklySummaryDependencies {
   store: SummaryDeliveryStore;
   publisher: SummaryPublisher;
   destination: string;
+  categories?(ids: string[]): Promise<Record<string, string>>;
 }
 
 export function createWeeklyTick(reader: ActivityReader, guildId: string, retentionDays: number, dependencies: WeeklySummaryDependencies, now = Date.now) {
@@ -49,9 +50,11 @@ export function createWeeklyTick(reader: ActivityReader, guildId: string, retent
     const window = latestWeeklyWindow(current);
     if (window.until < dependencies.store.enabledAt() || dependencies.store.has(window.until)) return;
     const from = Math.max(window.from, reader.collectionStartedAt(), current - retentionDays * day);
-    const content = from >= window.until
+    const result = from < window.until ? summarize(reader, guildId, from, window.until) : undefined;
+    const categories = result ? await dependencies.categories?.(result.channels.slice(0, 10).map(channel => channel.id)) : undefined;
+    const content = !result
       ? '**Weekly activity summary**\nNo retained collection data covers this reporting period.'
-      : formatSummary(summarize(reader, guildId, from, window.until), 'Weekly activity summary');
+      : formatSummary(result, 'Weekly activity summary', undefined, categories);
     const period = `Reporting window: <t:${window.from / 1000}:f> to <t:${window.until / 1000}:f> (Sunday noon, Europe/Warsaw).`;
     const nonce = createHash('sha256').update(`${dependencies.destination}:${window.until}`).digest('hex').slice(0, 24);
     await dependencies.publisher.publish(`${content}\n\n${period}`, nonce);

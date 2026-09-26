@@ -1,7 +1,7 @@
 import type { summarize } from './service.js';
 
-export function formatSummary(result: ReturnType<typeof summarize>, title = 'Activity summary', coverage?: string) {
-  const topChannels = result.channels.slice(0, 10).map(channel => `<#${channel.id}>: ${channel.count}`).join('\n') || 'No activity recorded.';
+export function formatSummary(result: ReturnType<typeof summarize>, title = 'Activity summary', coverage?: string, categories: Record<string, string> = {}) {
+  const topChannels = result.channels.slice(0, 10).map(channel => `${categories[channel.id] ? `${categories[channel.id]} / ` : ''}<#${channel.id}>: ${channel.count}`).join('\n') || 'No activity recorded.';
   const topUsers = result.topUsers.map((user, index) => `${index + 1}. <@${user.id}>: **${user.count}** messages`).join('\n') || 'No activity recorded.';
   const daily = result.days.slice(-14).map(day => `${day.date}: ${day.count}`).join('\n') || 'None';
   return [

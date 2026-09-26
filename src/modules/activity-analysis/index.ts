@@ -3,6 +3,7 @@ import type { ActivityRefresher } from '../../contracts/activity-refresh.js';
 import type { ActivityReader } from '../../contracts/activity.js';
 import type { BotModule } from '../../core/module.js';
 import { summarize } from './service.js';
+import { channelCategories } from './channel-labels.js';
 import { formatSummary } from './format.js';
 import { createWeeklyTick } from './schedule.js';
 import type { WeeklySummaryDependencies } from './schedule.js';
@@ -32,7 +33,7 @@ export function createAnalysis(reader: ActivityReader, guildId: string, retentio
     const dependencies = weekly.dependenciesFor(channelId, enabledAt);
     await createWeeklyTick(reader, guildId, retentionDays, { ...dependencies, store: {
       ...dependencies.store, enabledAt: () => Math.max(enabledAt, dependencies.store.enabledAt()),
-    } })();
+    }, categories: ids => channelCategories(weekly.client, guildId, ids) })();
   }) : undefined;
   const run = () => {
     active = (async () => {
@@ -65,7 +66,8 @@ export function createAnalysis(reader: ActivityReader, guildId: string, retentio
           }
         }
         const result = summarize(reader, guildId, from, until);
-        await interaction.editReply({ content: formatSummary(result, 'Activity summary', note) });
+        const categories = weekly ? await channelCategories(weekly.client, guildId, result.channels.slice(0, 10).map(channel => channel.id)) : {};
+        await interaction.editReply({ content: formatSummary(result, 'Activity summary', note, categories) });
       },
     }, ...(weekly ? [createDestinationCommand(summaryCommandData, weekly.client, guildId, weekly.destination, 'Weekly summaries post Sundays at 12:00 Europe/Warsaw, starting with the next due Sunday.')] : [])],
     async start() { if (tick) { stopped = false; run(); } },
