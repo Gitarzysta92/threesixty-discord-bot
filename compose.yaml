@@ -1,0 +1,35 @@
+# Coolify Git-based Compose application; outbound Discord worker, no public domain.
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+    environment:
+      NODE_ENV: production
+      TZ: Europe/Warsaw
+      DATA_DIR: /app/data
+      DISCORD_TOKEN: ${DISCORD_TOKEN:?Set the dedicated bot token}
+      DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:?Set the bot application ID}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:?Set the company server ID}
+      RESETS_CHANNEL_ID: ${RESETS_CHANNEL_ID:-}
+      RESETS_POLL_SECONDS: ${RESETS_POLL_SECONDS:-300}
+      ACTIVITY_COLLECTOR_ENABLED: ${ACTIVITY_COLLECTOR_ENABLED:-true}
+      ACTIVITY_ANALYSIS_ENABLED: ${ACTIVITY_ANALYSIS_ENABLED:-true}
+      ACTIVITY_RETENTION_DAYS: ${ACTIVITY_RETENTION_DAYS:-90}
+      ACTIVITY_EXCLUDED_CHANNEL_IDS: ${ACTIVITY_EXCLUDED_CHANNEL_IDS:-}
+      ACTIVITY_SUMMARY_CHANNEL_ID: ${ACTIVITY_SUMMARY_CHANNEL_ID:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - bot-data:/app/data
+    deploy:
+      replicas: 1
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+volumes:
+  bot-data:
