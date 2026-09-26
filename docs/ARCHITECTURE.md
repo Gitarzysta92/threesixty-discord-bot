@@ -78,3 +78,17 @@ Manual reports await refresh before querying the reader and retain the full requ
 `src/modules/openclaw/` is an optional independent `BotModule`, enabled by `OPENCLAW_ENABLED`. It owns its Discord listener and HTTP adapter; `src/app.ts` injects the client and configuration. It neither imports other features nor reads activity storage. Guild/channel filtering precedes agent requests. Mentions and replies trigger text-only conversations through a separately hosted OpenClaw Gateway; model selection and LiteLLM credentials live there. The module declares GuildMessages and MessageContent intents only when enabled.
 
 Sessions are scoped by bot, guild and channel/thread. Requests are bounded to one per room and four globally; shutdown detaches the listener and aborts active HTTP requests. Remote errors never expose prompts, tokens or response bodies through logs. See [OpenClaw setup](OPENCLAW.md) for deployment and data handling.
+
+### OpenClaw implementation preference
+
+Prefer OpenClaw-native conversation history, session handling, message grouping,
+participation decisions and automation over duplicating these features in this
+repository. The current HTTP bridge exposes only a subset of the native Discord
+integration. Check the installed Gateway version before extending the bridge;
+keep any necessary custom code limited to integration and access enforcement.
+
+The installed OpenClaw documentation describes native Discord ambient room events
+(`messages.groupChat.unmentionedInbound: "room_event"`) and explicit message-tool
+delivery, as well as native history and thread-bound sessions. These are not enabled
+by the current HTTP bridge. A timed, mention-triggered participation window has not
+yet been identified as a native configuration option; do not claim it is deployed.
