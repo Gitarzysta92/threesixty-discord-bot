@@ -77,3 +77,13 @@ test('native mode syncs channel controls and never invokes the legacy conversati
     assert.equal(db.store.get('123'), false);
   } finally { await module.stop(); db.close(); }
 });
+
+test('policy plugin declares startup activation and registers all enforcement hooks', async () => {
+  const { readFileSync } = await import('node:fs');
+  const manifest = JSON.parse(readFileSync(new URL('../deployment/openclaw/channel-policy/openclaw.plugin.json', import.meta.url), 'utf8'));
+  assert.equal(manifest.activation.onStartup, true);
+  const plugin = (await import(pluginUrl)).default;
+  const hooks: string[] = [];
+  plugin.register({ pluginConfig: { guildId: 'guild', botId: '42' }, runtime: { config: { current: () => ({}) } }, on(name: string) { hooks.push(name); } });
+  assert.deepEqual(hooks, ['before_dispatch', 'before_tool_call', 'message_sending']);
+});
