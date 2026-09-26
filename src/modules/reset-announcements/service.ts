@@ -40,8 +40,18 @@ export function createResetPoller(source: ResetSource, store: DeliveryStore, pub
     }
     for (const item of pending) {
       signal?.throwIfAborted();
-      if (store.has(item.key)) continue;
-      await publisher.publish(item);
+      // Upstream may reissue an unchanged reset under a different ID or timestamp
+      // spelling. Deduplicate what users actually see as well as source event IDs.
+      const contentKey = `content:v1:${createHash('sha256').update(item.content).digest('hex')}`;
+      if (store.has(item.key)) {
+        // Seed content receipts for destinations created before content deduplication.
+        store.mark(contentKey);
+        continue;
+      }
+      if (!store.has(contentKey)) {
+        await publisher.publish({ ...item, nonce: createHash('sha256').update(contentKey).digest('hex').slice(0, 24) });
+        store.mark(contentKey);
+      }
       store.mark(item.key);
     }
   };

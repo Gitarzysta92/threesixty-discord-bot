@@ -84,3 +84,37 @@ test('shutdown cancels a poll without publishing or marking unseen announcements
     assert.equal(db.store.initialized(), false);
   } finally { db.close(); }
 });
+
+test('unchanged visible reset information stays silent despite upstream ID and timestamp changes, including restarts', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'reset-content-test-'));
+  const path = join(dir, 'resets.sqlite');
+  let db = openDeliveryStore(path, 'company:channel');
+  let snapshot: ResetSnapshot = { resets: [latest], scheduled: null };
+  const sent: string[] = [];
+  const source = { async load() { return snapshot; } };
+  const publisher = { async publish(item: { content: string }) { sent.push(item.content); } };
+  try {
+    // Simulate receipts written by the previous release.
+    db.store.initialize([]);
+    db.store.mark('completed:latest:regular');
+    await createResetPoller(source, db.store, publisher)();
+    assert.equal(sent.length, 0);
+    snapshot.resets = [{ ...latest, id: 'replacement', announced_at: '2026-09-02T02:00:00+02:00', text: 'Unrendered metadata changed' }];
+    await createResetPoller(source, db.store, publisher)();
+    assert.equal(sent.length, 0);
+    snapshot.scheduled = { ...reset('planned', '2026-09-04T00:00:00Z'), status: 'scheduled', scheduled_for: '2026-09-05T00:00:00Z' };
+    await createResetPoller(source, db.store, publisher)();
+    assert.equal(sent.length, 1);
+    db.close(); db = openDeliveryStore(path, 'company:channel');
+    snapshot.scheduled = { ...snapshot.scheduled, id: 'planned-new-id', scheduled_for: '2026-09-05T02:00:00+02:00' };
+    const poll = createResetPoller(source, db.store, publisher);
+    await poll(); await poll();
+    assert.equal(sent.length, 1);
+    snapshot.scheduled.scheduled_for = '2026-09-06T00:00:00Z';
+    await poll();
+    assert.equal(sent.length, 2);
+    snapshot.resets.push(reset('planned-new-id', '2026-09-06T00:00:00Z'));
+    await poll(); await poll();
+    assert.equal(sent.length, 3);
+  } finally { db.close(); rmSync(dir, { recursive: true, force: true }); }
+});
