@@ -9,10 +9,10 @@ Discord -> this bot's openclaw module -> OpenClaw Gateway -> LiteLLM -> Qwen
 ## Behavior
 
 - Disabled by default. Set `OPENCLAW_PUBLIC_CHANNELS=true` to include all company-server channels visible to `@everyone`, plus public threads in those channels. Private threads and channels hidden from `@everyone` are excluded. Alternatively, explicit `OPENCLAW_CHANNEL_IDS` allow chosen channels and their accessible threads, including private ones. Leave that list empty for public-only participation.
-- Responds to direct bot mentions and same-channel replies to this bot. Other bots, webhooks, system messages, role/everyone mentions and ordinary conversation do not trigger answers.
+- Responds to `/tclaw prompt:<question>`, direct bot mentions and same-channel replies to this bot. Other bots, webhooks, system messages, role/everyone mentions and ordinary conversation do not trigger answers.
 - Sends the addressed message (up to 4,000 characters), author ID and the referenced same-channel message when available (up to 2,000 characters). It does not scan surrounding history or send attachments.
 - Each channel/thread has a separate stable OpenClaw session shared by its participants. OpenClaw controls session persistence and retention.
-- One request per room and at most four rooms run concurrently. Additional messages while busy are ignored; retry after the answer arrives. Requests time out after 60 seconds by default, without automatic retries.
+- One request per room and at most four rooms run concurrently. Additional messages while busy are ignored; slash commands receive a private busy response; retry after the answer arrives. Requests time out after 60 seconds by default, without automatic retries.
 - Replies disable mentions and are split into at most four Discord messages. Shutdown aborts local requests and suppresses subsequent replies. An HTTP disconnect may not cancel an already-running remote agent.
 
 Activity collection still stores metadata only. This feature additionally transmits message text to OpenClaw and its model backend. OpenClaw and LiteLLM may retain transcripts/logs according to their configuration. Select channels whose participants can share conversation context and configure retention on those services.
@@ -72,11 +72,11 @@ In the agent's workspace instructions, describe a concise company Discord assist
    OPENCLAW_TIMEOUT_SECONDS=60
    ```
 
-4. Restart the bot. No slash-command deployment is required. Mention it in an allowed channel, then reply to its answer. Verify silence in other channels and separate context between threads.
+4. Restart the bot and run `npm run commands:deploy` with `OPENCLAW_ENABLED=true` to register `/tclaw`. Use `/tclaw prompt:hello` in an allowed channel, then reply to its answer. Verify silence in other channels and separate context between threads.
 
 The base URL points to OpenClaw, including `/v1`, not LiteLLM. The LiteLLM key stays with OpenClaw. In Docker/Coolify, `127.0.0.1` means the bot container: use the Gateway's reachable private service hostname and configure its listener/network accordingly. Use HTTPS over an untrusted network. Persist OpenClaw state separately from the bot data volume.
 
-Set `OPENCLAW_ENABLED=false` and restart to disable participation. Removing a channel stops new participation after restart but does not erase its existing OpenClaw session.
+Set `OPENCLAW_ENABLED=false`, restart and redeploy commands to disable participation and remove `/tclaw`. Removing a channel stops new participation after restart but does not erase its existing OpenClaw session.
 
 ## Validation
 

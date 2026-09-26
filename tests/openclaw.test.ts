@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
 import { setImmediate } from 'node:timers/promises';
 import { ChannelType, Events, GatewayIntentBits, PermissionsBitField, PermissionFlagsBits } from 'discord.js';
-import type { Client, Message } from 'discord.js';
+import type { ChatInputCommandInteraction, Client, Message } from 'discord.js';
 import { pino } from 'pino';
 import { loadConfig } from '../src/config.js';
 import { createOpenClawClient } from '../src/modules/openclaw/api.js';
@@ -154,4 +154,71 @@ test('long replies fit Discord limits, preserve emoji boundaries, and cap output
   const cappedEmoji = replyChunks(`${'x'.repeat(7899)}😀${'y'.repeat(2000)}`);
   assert.equal(cappedEmoji.length, 4);
   assert.ok(!cappedEmoji.join('').includes('\uD83D'));
+});
+
+function slash(f: ReturnType<typeof fixture>, overrides: Record<string, unknown> = {}) {
+  const events: { kind: string; content?: string; flags?: number; allowedMentions?: unknown }[] = [];
+  const interaction = {
+    guildId, guild: null, channelId, channel: f.message().channel, user: { id: 'human' },
+    options: { getString: () => ' Hello ' },
+    async deferReply() { events.push({ kind: 'defer' }); },
+    async reply(data: object) { events.push({ kind: 'reply', ...data }); },
+    async editReply(data: object) { events.push({ kind: 'edit', ...data }); },
+    async followUp(data: object) { events.push({ kind: 'follow', ...data }); },
+    ...overrides,
+  } as unknown as ChatInputCommandInteraction;
+  return { events, run: () => f.module.commands[0]!.execute(interaction, { logger }) };
+}
+
+test('/tclaw defers, shares the message session, and splits replies without mentions', async () => {
+  const f = fixture(); await f.module.start();
+  const command = slash(f); await command.run(); await f.emit();
+  assert.equal(f.module.commands[0]!.data.name, 'tclaw');
+  assert.equal(f.requests[0]!.session, f.requests[1]!.session);
+  assert.equal(JSON.parse(f.requests[0]!.content).message, 'Hello');
+  assert.deepEqual(command.events.map(e => e.kind), ['defer', 'edit']);
+  await f.module.stop();
+  const long = fixture({ async reply() { return 'x'.repeat(4500); } }); await long.module.start();
+  const chunks = slash(long); await chunks.run();
+  assert.deepEqual(chunks.events.map(e => e.kind), ['defer', 'edit', 'follow', 'follow']);
+  assert.ok(chunks.events.slice(1).every(e => e.content!.length <= 2000));
+  assert.deepEqual(chunks.events[1]!.allowedMentions, { parse: [], repliedUser: false });
+  await long.module.stop();
+});
+
+test('/tclaw rejects disallowed channels and empty input without querying the agent', async () => {
+  const f = fixture(); await f.module.start();
+  for (const overrides of [{ channelId: 'private' }, { guildId: 'other' }, { channel: null }, { options: { getString: () => '   ' } }]) {
+    const command = slash(f, overrides); await command.run();
+    assert.equal(command.events[0]!.kind, 'reply');
+    assert.equal(command.events[0]!.flags, 64);
+  }
+  assert.equal(f.requests.length, 0); await f.module.stop();
+});
+
+test('/tclaw shares concurrency limits and cancels on shutdown', async () => {
+  let calls = 0;
+  const f = fixture({ reply(_input, signal) {
+    calls++;
+    return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }));
+  } });
+  await f.module.start();
+  const first = slash(f); const pending = first.run();
+  const second = slash(f); await second.run(); await f.emit();
+  assert.match(second.events[0]!.content!, /busy/);
+  assert.equal(calls, 1);
+  await f.module.stop(); await pending;
+  assert.deepEqual(first.events.map(e => e.kind), ['defer']);
+});
+
+test('/tclaw sanitizes failures and releases its channel for retry', async () => {
+  let calls = 0;
+  const f = fixture({ async reply() { if (++calls === 1) throw new Error('secret'); return 'Recovered'; } });
+  await f.module.start();
+  const first = slash(f); await first.run();
+  assert.match(first.events[1]!.content!, /try again/);
+  assert.ok(!first.events[1]!.content!.includes('secret'));
+  const second = slash(f); await second.run();
+  assert.equal(second.events[1]!.content, 'Recovered');
+  await f.module.stop();
 });

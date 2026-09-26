@@ -1,18 +1,28 @@
-import { ChannelType, Events, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
-import type { Client, Message, MessageMentionOptions } from 'discord.js';
+import { ChannelType, Events, GatewayIntentBits, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import type { ChatInputCommandInteraction, Client, Message, MessageMentionOptions } from 'discord.js';
 import type { Logger } from 'pino';
 import type { BotModule } from '../../core/module.js';
 import type { OpenClawClient } from './api.js';
 
 interface OpenClawConfig { guildId: string; channelIds: readonly string[]; publicChannels?: boolean }
 
-export function isAllowedMessage(message: Message, config: OpenClawConfig): boolean {
-  if (message.guildId !== config.guildId || message.author.bot || message.webhookId || message.system) return false;
+export const tclawCommandData = new SlashCommandBuilder()
+  .setName('tclaw').setDescription('Talk to OpenClaw in this channel')
+  .addStringOption(option => option.setName('prompt').setDescription('What would you like to ask?').setRequired(true).setMaxLength(4000));
+
+function isAllowedChannel(message: Pick<Message, 'guildId' | 'guild' | 'channelId'> & {
+  channel: Message['channel'] | ChatInputCommandInteraction['channel'];
+}, config: OpenClawConfig): boolean {
+  if (message.guildId !== config.guildId || !message.channel) return false;
   if (config.channelIds.includes(message.channelId) || (message.channel.isThread() && !!message.channel.parentId && config.channelIds.includes(message.channel.parentId))) return true;
   if (!config.publicChannels || !message.guild || message.channel.type === ChannelType.PrivateThread) return false;
   const channel = message.channel.isThread() ? message.channel.parent : message.channel;
   return !!channel && 'permissionsFor' in channel &&
     (channel.permissionsFor(message.guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel) ?? false);
+}
+
+export function isAllowedMessage(message: Message, config: OpenClawConfig): boolean {
+  return !message.author.bot && !message.webhookId && !message.system && isAllowedChannel(message, config);
 }
 
 /** Discord messages use UTF-16 length limits; preserve surrogate pairs at boundaries. */
@@ -81,7 +91,48 @@ export function createOpenClaw(client: Client, agent: OpenClawClient, config: Op
     active.set(message.channelId, work);
   };
   return {
-    id: 'openclaw', commands: [],
+    id: 'openclaw', commands: [{
+      data: tclawCommandData,
+      async execute(interaction) {
+        if (!isAllowedChannel(interaction, config)) {
+          await interaction.reply({ content: 'OpenClaw is not enabled in this channel.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+        const content = interaction.options.getString('prompt', true).trim();
+        if (!content) {
+          await interaction.reply({ content: 'Please enter a question.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+        if (stopped || !client.user || active.has(interaction.channelId) || active.size >= 4) {
+          await interaction.reply({ content: 'I’m busy just now. Please try again shortly.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+        const work = (async () => {
+          await interaction.deferReply();
+          if (shutdown.signal.aborted) return;
+          let sent = false;
+          try {
+            const response = await agent.reply({
+              session: `threesixty:${client.user!.id}:${config.guildId}:${interaction.channelId}`,
+              content: JSON.stringify({ authorId: interaction.user.id, message: content.slice(0, 4000) }),
+            }, shutdown.signal);
+            for (const chunk of replyChunks(response)) {
+              if (shutdown.signal.aborted) return;
+              if (!sent) await interaction.editReply({ content: chunk, allowedMentions });
+              else await interaction.followUp({ content: chunk, allowedMentions });
+              sent = true;
+            }
+          } catch {
+            logger.warn({ channelId: interaction.channelId }, 'OpenClaw command failed');
+            if (!sent && !shutdown.signal.aborted) await interaction.editReply({
+              content: 'I couldn’t get an answer just now. Please try again shortly.', allowedMentions,
+            });
+          }
+        })().finally(() => { active.delete(interaction.channelId); });
+        active.set(interaction.channelId, work);
+        await work;
+      },
+    }],
     intents: [GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
     async start() { if (!stopped) return; shutdown = new AbortController(); stopped = false; client.on(Events.MessageCreate, onMessage); },
     async stop() {

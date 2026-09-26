@@ -3,6 +3,7 @@ import { z } from 'zod';
 const snowflake = z.string().regex(/^\d{17,20}$/, 'Must be a Discord ID');
 const flag = z.enum(['true', 'false']).transform(value => value === 'true');
 const features = z.object({
+  OPENCLAW_ENABLED: flag.default(false),
   DATA_DIR: z.string().min(1).default('./data'),
   RESETS_POLL_SECONDS: z.coerce.number().int().min(60).max(86400).default(300),
   ACTIVITY_COLLECTOR_ENABLED: flag.default(true),
@@ -18,7 +19,6 @@ const schema = features.extend({
   DISCORD_APPLICATION_ID: snowflake,
   DISCORD_GUILD_ID: snowflake,
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
-  OPENCLAW_ENABLED: flag.default(false),
   OPENCLAW_PUBLIC_CHANNELS: flag.default(false),
   OPENCLAW_BASE_URL: z.string().default('http://127.0.0.1:18789/v1').refine(value => {
     try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash; }
