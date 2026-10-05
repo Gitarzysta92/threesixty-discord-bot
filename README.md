@@ -11,7 +11,7 @@ Foundation for a multipurpose company Discord bot. TypeScript, discord.js, Node.
 5. Run `cp .env.example .env` and fill in the token, application ID, and server ID. Keep `.env` private.
 6. Run `npm run commands:deploy`, then `npm run dev`.
 7. In your server, try `/ping`, `/help`, `/status`, and `/activity days:7` (the last two are administrators only).
-8. As a server administrator, run `/resets enable` in the destination channel, or `/resets enable channel:#resets`. Changes are saved without a restart. The first poll posts the latest known reset and any scheduled reset; it does not flood the channel with history.
+8. As a server administrator, run `/resets enable` in the destination channel, or `/resets enable channel:#resets`. Changes are saved without a restart. The first poll posts the latest known reset, any scheduled reset, and the latest day of Tibo’s 28-day challenge; it does not flood the channel with history.
 
 Activity collection and analysis are enabled independently by `ACTIVITY_COLLECTOR_ENABLED` and `ACTIVITY_ANALYSIS_ENABLED`. Configure excluded channels and retention in `.env`. Live statistics begin when collection starts. `/activity days:7` first checks saved scan coverage, fetches missing history across accessible channels and threads, then reports on the requested period, including the top three members by message count and category names beside ranked channels. Grant View Channel and Read Message History for this refresh; message text is never stored. Keep `DATA_DIR` on persistent storage. See [module architecture and task ownership](docs/ARCHITECTURE.md) for boundaries, contracts, and operational details.
 
