@@ -1,7 +1,7 @@
 # Separate Coolify Compose service; no public ports or domains.
 services:
   openclaw:
-    image: ghcr.io/openclaw/openclaw:2026.9.6
+    image: ghcr.io/openclaw/openclaw:2026.10.7
     restart: unless-stopped
     init: true
     environment:
@@ -10,9 +10,7 @@ services:
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:?Set the server ID}
       DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:?Set the bot ID}
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?Set a dedicated gateway token}
-      LITELLM_API_KEY: ${LITELLM_API_KEY:?Set an inference-only LiteLLM key}
-      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm-apr1oldawepmufv3ie8v2ge5:4000/v1}
-      LITELLM_MODEL: ${LITELLM_MODEL:-qwen3.5:9b}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6.1-sol}
       OPENCLAW_STATE_DIR: /home/node/.openclaw
       OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
       OPENCLAW_DISABLE_BONJOUR: '1'
@@ -26,17 +24,15 @@ services:
         const workspace = dir + '/workspace';
         fs.mkdirSync(workspace, {recursive: true});
         const previous = fs.existsSync(process.env.OPENCLAW_CONFIG_PATH) ? JSON.parse(fs.readFileSync(process.env.OPENCLAW_CONFIG_PATH, 'utf8')) : {};
+        const {models: _oldModels, ...prior} = previous;
         const config = {
-          ...previous,
+          ...prior,
           gateway: {mode: 'local', bind: 'lan', port: 18789,
             auth: {mode: 'token', token: process.env.OPENCLAW_GATEWAY_TOKEN},
             controlUi: {enabled: false},
             http: {endpoints: {chatCompletions: {enabled: true}}}},
-          models: {mode: 'replace', providers: {'company-litellm': {
-            baseUrl: process.env.LITELLM_BASE_URL, apiKey: process.env.LITELLM_API_KEY,
-            api: 'openai-completions', models: [{id: process.env.LITELLM_MODEL,
-              name: 'Company Qwen', input: ['text'], contextWindow: 32768, maxTokens: 2048}]}}},
-          agents: {defaults: {workspace, model: {primary: 'company-litellm/' + process.env.LITELLM_MODEL}},
+          agents: {defaults: {workspace, model: {primary: 'openai/' + process.env.OPENAI_MODEL},
+            models: {['openai/' + process.env.OPENAI_MODEL]: {agentRuntime: {id: 'codex'}}}},
             entries: {discord: {tools: {allow: ['message']}}}},
           tools: {allow: ['message'], message: {crossContext: {allowWithinProvider: false, allowAcrossProviders: false}}},
           commands: {native: false, text: false, config: false, restart: false},
@@ -51,7 +47,7 @@ services:
             }}
           }},
           plugins: {...previous.plugins, load: {paths: [dir + '/threesixty-channel-policy']}, entries: {...previous.plugins?.entries,
-            discord: {enabled: true}, 'threesixty-channel-policy': {enabled: true, config: {
+            discord: {enabled: true}, codex: {enabled: true}, 'threesixty-channel-policy': {enabled: true, config: {
               guildId: process.env.DISCORD_GUILD_ID, botId: process.env.DISCORD_APPLICATION_ID, mentionNames: ['threesixty'], windowSeconds: 300
             }}
           }},
@@ -80,9 +76,6 @@ services:
       bot:
         aliases:
           - threesixty-openclaw
-      litellm:
-        aliases:
-          - threesixty-openclaw-inference
     healthcheck:
       test: [CMD, node, dist/docker-healthcheck.js]
       interval: 30s
@@ -103,6 +96,3 @@ networks:
   bot:
     external: true
     name: w32j0cvy7nhjuw3t3es2te5c
-  litellm:
-    external: true
-    name: apr1oldawepmufv3ie8v2ge5

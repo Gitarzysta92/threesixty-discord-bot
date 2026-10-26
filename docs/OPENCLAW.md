@@ -3,7 +3,7 @@
 The optional `src/modules/openclaw/` module connects the existing Discord bot to a separately running OpenClaw Gateway. OpenClaw owns the agent, sessions and model configuration:
 
 ```text
-Discord -> this bot's openclaw module -> OpenClaw Gateway -> LiteLLM -> Qwen
+Discord -> OpenClaw's native Discord plugin -> Codex runtime -> OpenAI
 ```
 
 ## Native Discord mode
@@ -56,9 +56,12 @@ Pair that device once through OpenClaw's native device-pairing controls and gran
 ## Production configuration
 
 The reproducible service definition is `deployment/openclaw/compose.yaml`. It runs
-OpenClaw `2026.9.6` with persistent state and no published ports or domain. It joins
-the bot and LiteLLM private Docker networks. OpenClaw uses LiteLLM's `qwen3.5:9b`
-alias and a dedicated inference key; all credentials live in Coolify.
+OpenClaw `2026.10.7` with persistent state and no published ports or domain. It joins
+the bot's private Docker network and runs `openai/gpt-6.1-sol` through OpenClaw's
+native Codex runtime. Set `OPENAI_MODEL` to choose another supported OpenAI model.
+Sign in to OpenAI with ChatGPT using `openclaw models auth login --provider openai
+--agent discord --device-code` in the service container. The OAuth profile lives in
+the persistent OpenClaw state volume; keep that volume private and backed up.
 
 The company bot uses:
 
@@ -77,7 +80,7 @@ grant View Channel, Read Message History, Send Messages, and Send Messages in
 Threads as applicable. Server Members Intent is not requested.
 
 The service startup script writes managed config and assistant instructions while
-preserving synchronized channel rules. It allows only the native message tool;
+preserving synchronized channel rules and the OAuth profile. It allows only the native message tool;
 the admission plugin further limits it to reading and sending in the current
 enabled channel. Browser control, DMs, native/text command registration and server
 join introductions are disabled. The company bot remains the owner of its slash
@@ -94,14 +97,19 @@ verification is separate and does not send test messages into Discord.
 
 ## Deploy native integration
 
-Install the pinned official plugin once in the persistent OpenClaw service:
-`openclaw plugins install @openclaw/discord@2026.9.6`.
+Install the pinned official Discord plugin for a new persistent OpenClaw service:
+`openclaw plugins install @openclaw/discord@2026.10.7`. For an existing service,
+stop the Gateway, back up its state volume, and run `openclaw plugins update discord`
+with the new image and mounted volume. Run `openclaw doctor --fix` while the Gateway
+is stopped if the new release reports a pending state database migration. The Codex
+plugin is bundled in the image and enabled by the generated configuration.
 
 Edit `compose.template.yaml` and the local channel-policy plugin, then run
 `node deployment/openclaw/render-compose.mjs` to regenerate `compose.yaml`.
-The rendered service writes the plugin and managed configuration at startup while
-preserving synchronized channel rules and existing plugin configuration. Supply
-the existing Discord bot token/application/guild IDs through Coolify secrets.
+The rendered service writes the channel-policy plugin and managed configuration at
+startup while preserving synchronized channel rules and existing plugin configuration.
+Supply the existing Discord bot token/application/guild IDs through Coolify secrets.
+Remove the old LiteLLM environment variables after the Codex migration succeeds.
 Set `OPENCLAW_NATIVE_DISCORD_ENABLED=true` for the Gateway only after the company
 bot is running in native mode, to avoid duplicate replies during migration.
 
