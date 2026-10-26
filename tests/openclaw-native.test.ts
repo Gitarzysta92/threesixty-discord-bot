@@ -38,6 +38,9 @@ test('native message tools cannot cross channels or edit/delete messages', async
   for (const params of [{ action: 'read', channelId: '456' }, { action: 'delete', channelId: '123' }, { action: 'edit', channelId: '123' }]) {
     assert.equal(policy.beforeToolCall({ toolName: 'message', params }, context).block, true);
   }
+  assert.equal(policy.beforeToolCall({ toolName: 'kuma_status' }, context), undefined);
+  assert.equal(policy.beforeToolCall({ toolName: 'kuma_status' }, { sessionKey: 'agent:discord:discord:channel:789' }).block, true);
+  assert.equal(policy.beforeToolCall({ toolName: 'kuma_status' }, { sessionKey: 'agent:discord:main' }).block, true);
   assert.deepEqual(policy.sending({ to: 'channel:789' }, { channelId: 'discord' }), { cancel: true });
 });
 

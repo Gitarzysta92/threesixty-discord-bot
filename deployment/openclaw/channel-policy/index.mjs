@@ -22,6 +22,13 @@ export function createAdmission({ guildId, botId, mentionNames = [], windowSecon
       if ((awake.get(id) ?? 0) <= now()) return { handled: true };
     },
     beforeToolCall(event, context) {
+      if (event.toolName === 'kuma_status') {
+        const source = context.sessionKey?.match(/:discord:channel:(\d+)$/)?.[1];
+        if (!source || !allowed(source)) {
+          return { block: true, blockReason: 'Kuma status is available only in an enabled Discord channel.' };
+        }
+        return;
+      }
       if (event.toolName !== 'message') return;
       const match = context.sessionKey?.match(/:discord:channel:(\d+)$/);
       const source = match?.[1];

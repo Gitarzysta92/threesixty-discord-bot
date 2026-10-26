@@ -1,0 +1,15 @@
+{
+  "id": "threesixty-kuma-status",
+  "name": "ThreeSixty Kuma status",
+  "description": "Read-only Uptime Kuma metrics for existing enabled Discord channels.",
+  "activation": { "onStartup": true },
+  "contracts": { "tools": ["kuma_status"] },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["guildId"],
+    "properties": {
+      "guildId": { "type": "string" }
+    }
+  }
+}

@@ -80,11 +80,22 @@ grant View Channel, Read Message History, Send Messages, and Send Messages in
 Threads as applicable. Server Members Intent is not requested.
 
 The service startup script writes managed config and assistant instructions while
-preserving synchronized channel rules and the OAuth profile. It allows only the native message tool;
+preserving synchronized channel rules and the OAuth profile. It allows the native
+message tool and the read-only Kuma status tool;
 the admission plugin further limits it to reading and sending in the current
 enabled channel. Browser control, DMs, native/text command registration and server
 join introductions are disabled. The company bot remains the owner of its slash
 commands; activity and reset modules are unchanged.
+
+The optional `kuma_status` tool reads Kuma metrics in the same administrator-enabled
+Discord channels. It is absent until all three Kuma credentials are configured.
+It accepts no URL or action parameters, uses only `https://kuma.threesixty.dev/metrics`,
+and returns monitor names, status, rolling 24-hour uptime and response time without
+monitor URLs or credentials. The Gateway plugin reads secrets from its process
+environment; it never writes them into OpenClaw config or the agent workspace.
+The monitoring credentials still belong to this trusted Gateway process, so do
+not enable shell, filesystem or arbitrary web tools in this container. See
+[Kuma tool setup](KUMA_TOOL.md) for the path-scoped Cloudflare and Kuma grants.
 
 For rollback, stop native Discord handling before setting
 `OPENCLAW_NATIVE_DISCORD=false`. The legacy HTTP bridge remains available but has
