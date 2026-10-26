@@ -20,7 +20,8 @@ activity database. The native message tool can read more messages in the current
 channel when needed. DMs and other bots are disabled.
 
 A small OpenClaw plugin in `deployment/openclaw/channel-policy` handles only the
-missing admission rule: a bot mention opens a five-minute window for that exact
+missing admission rule: a bot account mention or its configured managed role mention
+opens a five-minute window for that exact
 channel, renewed by another mention. Outside it, unmentioned messages do not
 reach model dispatch. During it, native ambient room events let OpenClaw choose
 whether to send a message. No custom history buffer, model loop or reply-decision
@@ -75,7 +76,9 @@ OPENCLAW_CHANNEL_IDS=
 ```
 
 Set `OPENCLAW_TOKEN` to the private Gateway credential. The service also needs the
-existing Discord token/application/guild IDs. Enable Message Content Intent and
+existing Discord token/application/guild IDs. Set `DISCORD_BOT_ROLE_ID` to the bot's
+managed role ID if people select its role in Discord's mention picker. Other role
+mentions do not wake the agent. Enable Message Content Intent and
 grant View Channel, Read Message History, Send Messages, and Send Messages in
 Threads as applicable. Server Members Intent is not requested.
 

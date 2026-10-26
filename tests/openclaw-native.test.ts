@@ -92,15 +92,18 @@ test('policy plugin declares startup activation and registers all enforcement ho
 });
 
 // OpenClaw 2026.9.6 resolves raw Discord user mentions before before_dispatch.
-test('native normalized user mentions wake admission without accepting role mentions', async () => {
+test('native mentions wake admission only for the bot user or its configured role', async () => {
   const { createAdmission } = await import(pluginUrl);
-  const make = () => createAdmission({ guildId: 'guild', botId: '42', mentionNames: ['threesixty'] },
+  const make = (botRoleId?: string) => createAdmission({ guildId: 'guild', botId: '42', botRoleId, mentionNames: ['threesixty'] },
     () => ({ channels: { discord: { guilds: { guild: { channels: { room: { enabled: true } } } } } } }));
   const context = { conversationId: 'channel:room' };
-  for (const content of ['@threesixty hello', 'hello @threesixty!', '<@42> hello']) {
-    assert.equal(make().beforeDispatch({ channel: 'discord', content }, context), undefined);
+  for (const content of ['@threesixty hello', 'hello @threesixty!', '<@42> hello', '<@&99> hello']) {
+    assert.equal(make('99').beforeDispatch({ channel: 'discord', content }, context), undefined);
   }
-  for (const content of ['<@&42> hello', '@threesixty-other hello', 'ordinary chat']) {
+  for (const content of ['<@&42> hello', '<@&990> hello', '@threesixty-other hello', 'ordinary chat']) {
+    assert.deepEqual(make('99').beforeDispatch({ channel: 'discord', content }, context), { handled: true });
+  }
+  for (const content of ['<@&99> hello', '<@&42> hello']) {
     assert.deepEqual(make().beforeDispatch({ channel: 'discord', content }, context), { handled: true });
   }
 });

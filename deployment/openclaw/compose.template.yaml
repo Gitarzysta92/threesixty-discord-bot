@@ -9,6 +9,7 @@ services:
       DISCORD_TOKEN: ${DISCORD_TOKEN:?Set the existing Discord bot token}
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:?Set the server ID}
       DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:?Set the bot ID}
+      DISCORD_BOT_ROLE_ID: ${DISCORD_BOT_ROLE_ID:-}
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?Set a dedicated gateway token}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6.1-sol}
       KUMA_METRICS_API_KEY: ${KUMA_METRICS_API_KEY:-}
@@ -51,7 +52,8 @@ services:
           }},
           plugins: {...previous.plugins, load: {paths: [dir + '/threesixty-channel-policy', dir + '/threesixty-kuma-status']}, entries: {...previous.plugins?.entries,
             discord: {enabled: true}, codex: {enabled: true}, 'threesixty-channel-policy': {enabled: true, config: {
-              guildId: process.env.DISCORD_GUILD_ID, botId: process.env.DISCORD_APPLICATION_ID, mentionNames: ['threesixty'], windowSeconds: 300
+              guildId: process.env.DISCORD_GUILD_ID, botId: process.env.DISCORD_APPLICATION_ID,
+              botRoleId: process.env.DISCORD_BOT_ROLE_ID || undefined, mentionNames: ['threesixty'], windowSeconds: 300
             }}, 'threesixty-kuma-status': {enabled: true, config: {guildId: process.env.DISCORD_GUILD_ID}}
           }},
           browser: {enabled: false}
